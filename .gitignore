@@ -1,3 +1,37 @@
 .env.local
 venv/
 .DS_Store
+
+# Local development files
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.venv/
+__pycache__/
+*.pyc
+*.log
+.python/
+.uv-cache/
+.pytest_cache/
+!.env.livekit.example
+
+# Local settings and runtime files
+.env
+.env.*
+!.env.example
+!.env.livekit.example
+!.env.sample
+!.env.template
+.streamlit/secrets.toml
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+logs/
+*.pyc
+*.log
+*.bak
+*.db
+*.sqlite
+*.sqlite3
