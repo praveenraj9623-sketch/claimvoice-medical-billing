@@ -11,7 +11,7 @@ CSS = """
 .stApp {background:#f5f8fa;}
 .stApp, [data-testid="stSidebar"] {font-family:'DM Sans',sans-serif;color:var(--cv-ink);}
 h1,h2,h3 {font-family:'Manrope',sans-serif!important;letter-spacing:-.035em!important;color:var(--cv-ink)!important;}
-.stMainBlockContainer {max-width:1400px;padding-top:2.4rem;padding-bottom:3rem;}
+.stMainBlockContainer {max-width:1400px;padding-top:4rem;padding-bottom:3rem;}
 [data-testid="stSidebar"] {background:#fff;border-right:1px solid var(--cv-line);}
 [data-testid="stSidebar"] .stSidebarBlockContainer {padding-top:2rem;}
 [data-testid="stSidebar"] h2 {font-size:1rem;letter-spacing:0!important;}
@@ -66,7 +66,7 @@ button[data-baseweb="tab"] {font-size:.93rem;font-weight:600;padding:0 1.1rem;}
 .cv-empty h2 {font-size:1.5rem!important;margin:0 0 10px;}
 .cv-empty p {color:var(--cv-muted);font-size:.91rem;line-height:1.8;max-width:650px;}
 .cv-footer {font-size:.73rem;line-height:1.6;color:var(--cv-muted);border-top:1px solid var(--cv-line);padding-top:15px;margin-top:1.7rem;}
-@media(max-width:760px){.stMainBlockContainer{padding:1.4rem 1rem 2rem}.cv-hero{align-items:flex-start;flex-direction:column;gap:12px}.cv-hero h1{font-size:1.65rem!important}.cv-summary{grid-template-columns:1fr 1fr}.cv-steps{gap:5px}.cv-step{padding:8px;font-size:.7rem;gap:5px}.cv-draft{grid-template-columns:1fr}.cv-stat{padding:12px}.cv-empty{padding:22px}}
+@media(max-width:760px){.stMainBlockContainer{padding:4rem 1rem 2rem}.cv-hero{align-items:flex-start;flex-direction:column;gap:12px}.cv-hero h1{font-size:1.65rem!important}.cv-summary{grid-template-columns:1fr 1fr}.cv-steps{gap:5px}.cv-step{padding:8px;font-size:.7rem;gap:5px}.cv-draft{grid-template-columns:1fr}.cv-stat{padding:12px}.cv-empty{padding:22px}}
 </style>
 """
 
@@ -118,7 +118,7 @@ def summary(state, claim):
         ("Selected claim", state.claim_id, claim["patient"]),
         ("Billed amount", amount(claim["billed_amount"]), "Original submitted amount"),
         ("Session mode", state.mode, "No API requests" if state.mode == "Scripted walkthrough" else "Explicit Groq requests"),
-        ("Session status", "Ended" if state.ended else "Active", "Human review flagged" if state.handoff else f"{len(state.turns)} conversation turns"),
+        ("Session status", "Ended" if state.ended else "Active", "Human review flagged" if state.handoff else f"{len(state.turns)} conversation turn{'s' if len(state.turns) != 1 else ''}"),
     ]
     st.markdown('<div class="cv-summary">' + ''.join(
         f'<div class="cv-stat"><div class="cv-label">{safe(label)}</div><div class="cv-value">{safe(value)}</div><div class="cv-sub">{safe(sub)}</div></div>'

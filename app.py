@@ -68,7 +68,7 @@ def conversation(state, client, config, scenario):
                 st.info("Session ended. You can still review and export.")
     with left:
         ui.section("Conversation", "Reported facts stay linked to the representative’s transcript.")
-        with st.container(height=380, border=False):
+        with st.container(height=240 if len(state.turns) == 1 else 360, border=False):
             for turn in state.turns:
                 with st.chat_message(turn["role"], avatar="🎧" if turn["role"] == "assistant" else "👤"):
                     st.caption(f"Turn {turn['id']} · {'Insurer representative' if turn['role'] == 'user' else 'Billing assistant · ' + state.mode}")
