@@ -18,6 +18,10 @@ A useful follow-up note needs a status, reference, requested documents, next act
 
 Original claim data and newly reported facts stay separate. Unknown facts remain null. Reported payment is not a verified remittance or bank receipt.
 
+## Interface
+
+The workspace separates **Conversation**, **Review & export** and **Activity**. Readable claim cards and draft fields are shown first; original JSON and tool payloads remain available in expandable panels. Browser playback has explicit Play/Stop controls. The sidebar configures the session, and changing a claim or mode still requires an explicit reset.
+
 ## Modes, models and tools
 
 | Component | Actual implementation |
@@ -77,7 +81,7 @@ The app also reads a manually created root `.env`; no `.env.example` is required
 1. Select **Scripted walkthrough**, a claim and **Pending processing**; click **Start / reset session**.
 2. Click **Use scenario example**, then **Send reply**. The script reads `Status`, `Reference`, `Documents`, `Next action` and `Follow-up date` labels.
 3. Compare the draft with the supporting representative turn. Dates must be explicit YYYY-MM-DD values.
-4. Check the approval box, then **Save reviewed follow-up**. Show JSON/CSV export and transcript download.
+4. Open **Review & export**, check the supporting transcript and approval box, then **Save reviewed follow-up**. Show JSON/CSV export and transcript download.
 5. Submit `human handoff`, then `end session` separately. Explain that these are local state changes.
 6. Download before resetting. Repeat with document-requested or payment-reported scenarios.
 
@@ -95,7 +99,7 @@ Recording uploads audio to the Streamlit host; requested transcription sends it 
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-The implementation report records **20 passing offline tests** using mocked external services. Coverage includes tool/evidence validation, session isolation, duplicate protection, review-gated saves, exports, service errors and Streamlit AppTest flows. This cleanup did not rerun them or make live API calls. Offline tests do not validate microphone hardware, audible output, model quality or production load.
+The UI update passed **22 offline tests**, with external socket connections blocked. Coverage includes tool/evidence validation, session isolation, duplicate protection, review-gated saves, exports, service errors, Streamlit AppTest flows and HTML/script escaping. Dependency and whitespace checks also passed. No live Groq requests were made during this update. Offline tests do not validate microphone hardware, audible output, model quality or production load.
 
 Before a live demonstration, separately check microphone permission, transcription/edit/send, audible Play/Stop, safe failure handling and exports in the actual browser. Typed input and clearly labelled scripted mode remain separate demonstration paths.
 
