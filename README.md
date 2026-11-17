@@ -4,6 +4,33 @@
 
 A turn-based browser PoC that turns fictional insurer replies into a structured follow-up draft. The user plays an insurer representative; the assistant plays a billing employee. Built with Python, Streamlit, Groq, HTTPX and browser speech.
 
+## Browser Voice
+
+Open **Browser Voice**, start a microphone session, and play the representative for fictional claim TEST-48213. ClaimVoice waits on hold, asks for missing answers, and saves the transcript, captured fields and evidence checks. The panel can export its report as JSON. **Claim follow-up** and **Phone Lab** are also available from the sidebar.
+
+### Run from the checkout
+
+Python 3.12 is used in the voice service container. Install `requirements.txt` for Streamlit and `requirements-browser.txt` for the backend. Copy `browser.env.example` to `.env` for a fresh checkout, or add its keys to your existing `.env`. Supply `GROQ_API_KEY` and generate a launch signing secret with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Use the same signing secret on the backend and in Streamlit.
+
+Start these in two terminals:
+
+```sh
+python -m uvicorn claimvoice.browser.server:app_factory --factory --host 0.0.0.0 --port 7860 --no-access-log
+python -m streamlit run app.py
+```
+
+Restart both processes after changing their settings. In a new tab or inside the workspace, grant browser microphone access. For the easiest first check, say “please hold,” then “I'm back.” Say “the claim is pending,” then give a reference and representative name one at a time. Say “unknown” twice for a required field to see the review flag.
+
+### Host a staging demo
+
+Deploy `Dockerfile.browser` as a separate, single-worker service. Configure HTTPS and test ICE connectivity over UDP from an external network. An HTTP-only host can pass `/ready` without carrying WebRTC audio. `CLAIMVOICE_STUN_URLS` accepts STUN endpoints when needed. This version does not configure a TURN relay. For restricted networks, plan relay support or verify a reachable ICE path before sharing the demo.
+
+Set `CLAIMVOICE_STREAMLIT_ORIGIN` on the backend to the existing Streamlit HTTPS origin. Set `CLAIMVOICE_BROWSER_URL` and the shared `CLAIMVOICE_BROWSER_SECRET` in Streamlit secrets. Set the Groq key only on the backend for Browser Voice. Store the SQLite database on a persistent volume or set `CLAIMVOICE_BROWSER_STORAGE` to a dedicated PostgreSQL connection string configured for verified TLS. Keep the voice API to one worker, because in-progress calls and launch limits live in its process. Completed reports persist in the selected database. A process restart interrupts active calls.
+
+The backend exchanges microphone audio over WebRTC and sends final, VAD-segmented utterances to Groq Whisper. The browser speaks the resulting prompts with device speech synthesis and pauses input during playback. Response time in reports runs from final transcript to server reply and excludes audio processing and playback. The capture path uses deterministic parsing and a Groq exact-quote fallback for selected fields. The evidence checker flags missing or unsupported answers. A matched quote establishes transcript support, not a verified payment.
+
+Before publishing the resume link, test the deployed embed and separate-tab fallback with a real microphone, speaker, and Groq account on the intended network. Verify hold and resume, saved records, and responses when the provider is unavailable. Use fictional information only. The live telephone integration is a separate milestone.
+
 ## Phone Lab
 
 Select **Phone Lab** in the Streamlit sidebar to run synthetic insurer calls and inspect IVR navigation, hold behavior, structured capture, evidence checks and benchmark results. [Phone Lab setup and optional Twilio test adapter](PHONE_LAB.md).

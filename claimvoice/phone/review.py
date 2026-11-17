@@ -21,8 +21,10 @@ def check_transcript(fields, evidence, transcript):
             issues.append(f"unsupported:{key}")
             continue
         quote = transcript[index]
+        text = quote["text"]
+        excerpt = quote.get("evidence_quote", text)
         if (quote.get("speaker") != "representative" or quote.get("asked_for") != key
-                or normalize(key, quote["text"]) != value):
+                or not excerpt or excerpt not in text or normalize(key, excerpt) != value):
             issues.append(f"unsupported:{key}")
     return issues
 

@@ -1,5 +1,6 @@
 """Bounded call flow for one synthetic insurer route."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
@@ -54,7 +55,7 @@ def normalize(field_name, text):
     if field_name in labels:
         text = re.sub(rf"^(?:the )?{labels[field_name]}(?:\s+is\s+|\s*:\s*)", "", text, flags=re.I)
     if field_name == "status":
-        match = re.fullmatch(r"(?:(?:the )?claim (?:status is |is )|status\s*:\s*)?(paid|denied|pending)", text, re.I)
+        match = re.fullmatch(r"(?:(?:(?:the )?claim|it) (?:(?:status )?is |(?:has )?been |was )|status\s*:\s*)?(?:still )?(paid|denied|pending)", text, re.I)
         return match[1].lower() if match else None
     if field_name == "paid_amount":
         match = re.fullmatch(r"\$?((?:\d{1,3}(?:,\d{3})+|\d{1,9})(?:\.\d{1,2})?)(?: dollars)?", text, re.I)
@@ -92,9 +93,17 @@ class Call:
     transcript: list = field(default_factory=list)
     latencies_ms: list = field(default_factory=list)
     prompts_seen: int = 0
+    quote_finder: Callable[[str, str], str | None] | None = field(default=None, repr=False)
 
     def __post_init__(self):
         self.started = self.clock()
+
+    def connect_representative(self):
+        self.ivr_passed = True
+        self.hold_until = None
+        self.retries = 0
+        self.awaiting = "status"
+        return [self.speak(f"{GREETING} {QUESTIONS[self.awaiting]}")]
 
     def speak(self, text):
         self.transcript.append({"speaker": "agent", "text": text})
@@ -157,11 +166,7 @@ class Call:
             if not re.search(r"\b(?:representative here|how (?:can|may) i help)\b", lower):
                 self.retries += 1
                 return self.finish("ivr_mismatch") if self.retries >= 2 else []
-            self.ivr_passed = True
-            self.hold_until = None
-            self.retries = 0
-            self.awaiting = "status"
-            return [self.speak(f"{GREETING} {QUESTIONS[self.awaiting]}")]
+            return self.connect_representative()
 
         self.transcript.append({"speaker": "representative", "text": text, "asked_for": self.awaiting})
         if re.search(r"\b(?:please hold|hold please|one moment|please wait)\b", lower):
@@ -177,8 +182,15 @@ class Call:
         if re.search(r"\b(?:repeat|confirm)\b.*\bclaim (?:number|id)\b|\bclaim (?:number|id) again\b", lower):
             return [self.speak(f"The claim number is {CLAIM_ID}. {QUESTIONS[self.awaiting]}")]
 
-        value = normalize(self.awaiting, text)
-        if value is None or re.search(r"\b(?:unknown|unavailable|not available|cannot disclose|don't know)\b", lower):
+        withheld = re.search(r"\b(?:unknown|unavailable|not available|cannot disclose|don't know)\b", lower)
+        value = normalize(self.awaiting, text) if not withheld else None
+        if value is None and self.quote_finder and not withheld:
+            quote = self.quote_finder(self.awaiting, text)
+            if quote and quote in text:
+                value = normalize(self.awaiting, quote)
+                if value is not None:
+                    self.transcript[-1]["evidence_quote"] = quote
+        if value is None:
             self.retries += 1
             if self.retries < 2:
                 return [self.speak(f"Could you repeat that? {QUESTIONS[self.awaiting]}")]

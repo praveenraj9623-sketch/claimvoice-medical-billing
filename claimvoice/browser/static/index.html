@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ClaimVoice · Voice session</title>
+  <link rel="stylesheet" href="/static/voice.css">
+  <script src="/static/voice.js" defer></script>
+</head>
+<body>
+  <main class="workspace">
+    <section class="panel stage" aria-labelledby="title">
+      <div class="claim"><strong>TEST-48213</strong><span>Synthetic EMS claim</span></div>
+      <div class="orb" aria-hidden="true"><div class="wave"><i></i><i></i><i></i><i></i><i></i></div></div>
+      <h1 id="title">Talk to ClaimVoice</h1>
+      <p>Play the insurer representative and answer the agent aloud.</p>
+      <p id="state" class="state" role="status">Ready</p>
+      <div class="controls">
+        <button type="button" id="start">Start voice session</button>
+        <button type="button" id="stop" class="secondary" disabled>End session</button>
+      </div>
+      <details>
+        <summary>Example answers</summary>
+        <ul>
+          <li>The claim is paid. The amount is $125.50.</li>
+          <li>The EFT number is EFT-771. The payment date is March 20, 2026.</li>
+          <li>The reference is QA-111. My name is Alex Smith.</li>
+        </ul>
+        <p>Give one answer at a time. Say “please hold,” then “I’m back” to try hold and resume.</p>
+      </details>
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+    <section class="panel review" aria-labelledby="review-title">
+      <h2 id="review-title">Session record</h2>
+      <h3>Transcript</h3>
+      <ol id="transcript" class="transcript" aria-label="Conversation transcript" tabindex="0"></ol>
+      <p id="empty">Your conversation will appear here.</p>
+      <section id="results" hidden>
+        <div class="result-title"><h3>Captured answers</h3><button type="button" id="export" class="secondary">Download JSON</button></div>
+        <p id="review-status" role="status"></p>
+        <ul id="issues" hidden></ul>
+        <dl id="fields"></dl>
+        <p id="latency" class="latency"></p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

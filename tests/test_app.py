@@ -9,9 +9,14 @@ def button(at, label):
     return next(b for b in at.button if b.label == label)
 
 
+def legacy_app():
+    app = AppTest.from_file(APP).run()
+    return app.sidebar.radio[0].set_value("Claim follow-up").run()
+
+
 def test_launch_and_review(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "")
-    at = AppTest.from_file(APP).run()
+    at = legacy_app()
     assert not at.exception
     button(at, "Start / reset session").click().run()
     assert not at.exception
@@ -31,8 +36,8 @@ def test_launch_and_review(monkeypatch):
 
 
 def test_browser_sessions_isolated():
-    a = AppTest.from_file(APP).run()
-    b = AppTest.from_file(APP).run()
+    a = legacy_app()
+    b = legacy_app()
     button(a, "Start / reset session").click().run()
     button(b, "Start / reset session").click().run()
     assert a.session_state.cv.session_id != b.session_state.cv.session_id
@@ -46,7 +51,7 @@ def test_audio_requires_explicit_action_and_deduplicates(monkeypatch):
         calls.append(audio)
         return "Editable fictional insurer statement"
     monkeypatch.setattr(GroqClient, "transcribe", transcribe)
-    at = AppTest.from_file(APP).run()
+    at = legacy_app()
     at.selectbox[0].select("Live Groq").run()
     button(at, "Start / reset session").click().run()
     at.audio_input[0].upload("recording.wav", b"mock-wav").run()
@@ -70,7 +75,7 @@ def test_live_failure_explicit_retry_without_duplicate_user(monkeypatch):
             raise ServiceError("Groq timed out. Conversation preserved; retry explicitly.")
         return "What is the reference number?"
     monkeypatch.setattr(GroqClient, "reply", reply)
-    at = AppTest.from_file(APP).run()
+    at = legacy_app()
     at.selectbox[0].select("Live Groq").run()
     button(at, "Start / reset session").click().run()
     at.text_area[0].input("Pending processing")
@@ -92,3 +97,14 @@ def test_phone_lab_runs_offline_benchmark():
         ("Calls attempted", "6"), ("IVR passed", "5"),
         ("Complete records", "3"), ("Flagged for review", "3"),
     ]
+
+
+def test_browser_voice_launch_can_refresh_ticket(monkeypatch):
+    monkeypatch.setenv("CLAIMVOICE_BROWSER_URL", "http://localhost:7860")
+    monkeypatch.setenv("CLAIMVOICE_BROWSER_SECRET", "offline-test-secret-for-browser-voice")
+    at = AppTest.from_file(APP).run()
+    assert not at.exception
+    ticket = at.session_state.browser_voice_ticket
+    button(at, "New voice session").click().run()
+    assert at.session_state.browser_voice_ticket != ticket
+    assert not at.exception

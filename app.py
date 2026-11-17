@@ -10,6 +10,7 @@ from claimvoice.storage import save_reviewed, export_json, export_csv, transcrip
 from claimvoice.workflow import start, submit, respond
 from claimvoice import presentation as ui
 from claimvoice.phone.lab import render as render_phone_lab
+from claimvoice.browser.workspace import render as render_browser_voice
 
 
 def setup(config):
@@ -189,7 +190,7 @@ def activity(state):
 def main():
     st.set_page_config(page_title="ClaimVoice | Follow-up workspace", page_icon="🎧", layout="wide")
     ui.style()
-    workspace = st.sidebar.radio("Workspace", ["Claim follow-up", "Phone Lab"])
+    workspace = st.sidebar.radio("Workspace", ["Browser Voice", "Claim follow-up", "Phone Lab"])
     if workspace == "Phone Lab":
         render_phone_lab()
         return
@@ -197,6 +198,9 @@ def main():
         secrets = dict(st.secrets)
     except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
         secrets = {}
+    if workspace == "Browser Voice":
+        render_browser_voice(secrets)
+        return
     config = load_config(secrets)
     client = GroqClient(config)
     mode, claim_id, scenario = setup(config)

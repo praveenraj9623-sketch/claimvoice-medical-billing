@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=7860
+WORKDIR /service
+COPY requirements-browser.txt .
+RUN python -m pip install --no-cache-dir -r requirements-browser.txt \
+    && groupadd --system claimvoice \
+    && useradd --system --gid claimvoice --no-create-home claimvoice \
+    && mkdir /data \
+    && chown claimvoice:claimvoice /data
+COPY claimvoice ./claimvoice
+
+USER claimvoice:claimvoice
+ENV CLAIMVOICE_BROWSER_STORAGE=/data/claimvoice-browser.sqlite3
+EXPOSE 7860
+CMD ["sh", "-c", "exec python -m uvicorn claimvoice.browser.server:app_factory --factory --host 0.0.0.0 --port \"$PORT\" --no-access-log"]
