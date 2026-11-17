@@ -1,0 +1,12 @@
+**
+!Dockerfile
+!requirements-phone.txt
+!claimvoice/
+!claimvoice/**/
+!claimvoice/**/*.py
+**/__pycache__
+!Dockerfile.browser
+!requirements-browser.txt
+!claimvoice/browser/static/*.html
+!claimvoice/browser/static/*.css
+!claimvoice/browser/static/*.js

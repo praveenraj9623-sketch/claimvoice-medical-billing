@@ -20,15 +20,16 @@ class ServiceError(Exception):
 
 
 class GroqClient:
-    def __init__(self, config, transport=None):
+    def __init__(self, config, transport=None, *, timeout=35):
         self.config = config
         self.transport = transport
+        self.timeout = timeout
 
     def post(self, endpoint, **kwargs):
         if not self.config.api_key:
             raise ServiceError("Groq key is missing. Configure it locally or use Scripted walkthrough.")
         try:
-            with httpx.Client(timeout=35, transport=self.transport) as client:
+            with httpx.Client(timeout=self.timeout, transport=self.transport) as client:
                 response = client.post("https://api.groq.com/openai/v1/" + endpoint,
                     headers={"Authorization": "Bearer " + self.config.api_key}, **kwargs)
             if response.status_code in (401, 403):
@@ -73,6 +74,8 @@ class GroqClient:
                         except ValueError:
                             args = None
                         result = execute(state, call["function"]["name"], args)
+                        if state.ended and result.get("ok"):
+                            return "Session ended. You can still review and export your draft."
                         messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result)})
                 else:
                     content = msg.get("content")
