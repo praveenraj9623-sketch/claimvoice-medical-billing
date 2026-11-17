@@ -4,6 +4,10 @@
 
 A turn-based browser PoC that turns fictional insurer replies into a structured follow-up draft. The user plays an insurer representative; the assistant plays a billing employee. Built with Python, Streamlit, Groq, HTTPX and browser speech.
 
+## Phone Lab
+
+Select **Phone Lab** in the Streamlit sidebar to run synthetic insurer calls and inspect IVR navigation, hold behavior, structured capture, evidence checks and benchmark results. [Phone Lab setup and optional Twilio test adapter](PHONE_LAB.md).
+
 ## User problem and outcome
 
 A useful follow-up note needs a status, reference, requested documents, next action and follow-up date. ClaimVoice keeps these together with supporting transcript turns, requires human approval before saving, and exports reviewed records. More consistent documentation is the intended benefit; real call handling, time savings and throughput have not been measured.
