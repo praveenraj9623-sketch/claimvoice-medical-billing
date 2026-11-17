@@ -81,3 +81,14 @@ def test_live_failure_explicit_retry_without_duplicate_user(monkeypatch):
     button(at, "Retry assistant explicitly").click().run()
     assert len(attempts) == 2 and len(at.session_state.cv.turns) == 3
     assert not at.exception
+
+
+def test_phone_lab_runs_offline_benchmark():
+    at = AppTest.from_file(APP).run()
+    at.sidebar.radio[0].set_value("Phone Lab").run()
+    button(at, "Run benchmark").click().run()
+    assert not at.exception
+    assert [(metric.label, metric.value) for metric in at.metric] == [
+        ("Calls attempted", "6"), ("IVR passed", "5"),
+        ("Complete records", "3"), ("Flagged for review", "3"),
+    ]

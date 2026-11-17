@@ -73,6 +73,8 @@ class GroqClient:
                         except ValueError:
                             args = None
                         result = execute(state, call["function"]["name"], args)
+                        if state.ended and result.get("ok"):
+                            return "Session ended. You can still review and export your draft."
                         messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result)})
                 else:
                     content = msg.get("content")

@@ -9,6 +9,7 @@ from claimvoice.speech import speech_html
 from claimvoice.storage import save_reviewed, export_json, export_csv, transcript
 from claimvoice.workflow import start, submit, respond
 from claimvoice import presentation as ui
+from claimvoice.phone.lab import render as render_phone_lab
 
 
 def setup(config):
@@ -188,6 +189,10 @@ def activity(state):
 def main():
     st.set_page_config(page_title="ClaimVoice | Follow-up workspace", page_icon="🎧", layout="wide")
     ui.style()
+    workspace = st.sidebar.radio("Workspace", ["Claim follow-up", "Phone Lab"])
+    if workspace == "Phone Lab":
+        render_phone_lab()
+        return
     try:
         secrets = dict(st.secrets)
     except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):

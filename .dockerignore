@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!requirements-phone.txt
+!claimvoice/
+!claimvoice/**/
+!claimvoice/**/*.py
+**/__pycache__
