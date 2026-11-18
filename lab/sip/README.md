@@ -7,3 +7,16 @@ The caller joins a LiveKit room, publishes an audio track and dials Asterisk thr
 Look for `PASS: caller audio returned through Asterisk Echo()` and exit code zero. The runner tears down the temporary stack and writes service logs, image details and the result under `artifacts/sip/`. The Asterisk report lists installed WebSocket modules and the AudioSocket application for planning the representative bridge. Look specifically for `chan_websocket.so` before choosing that channel driver.
 
 The local voice feasibility run at revision d523189 passed both paid and pending in two operator-reported WSL trials. This SIP test checks the transport independently of the language and speech models. Once a connected run passes, record the working image digests and SDK versions before combining the two. The initial LiveKit images can be overridden with LIVEKIT_SERVER_IMAGE and LIVEKIT_SIP_IMAGE.
+
+### First spoken exchange
+
+In the same WSL environment as the successful voice and SIP tests, run
+`bash scripts/run_voice_probe.sh --sip-pending`. The ordinary voice probe and
+extension 7001 echo check remain available. Extension 7002 records the caller's
+spoken question, then plays a fixed synthetic insurer reply. Key # marks the end
+of the question. Tones delimit the reply on the caller's received audio track.
+Whisper reads the two recordings after the call; the local Qwen extractor sees
+only the insurer transcript. The check expects the caller's billing/status
+question, representative Daniel, pending status, and three unknown payment fields.
+Inspect both received WAVs and result.json in the printed artifacts/sip-exchange
+directory. This exercises one scripted representative turn and offline capture.

@@ -1,6 +1,8 @@
 """Private transport probe. Asterisk emits 660 Hz only after receiving key 2."""
 import asyncio
 import os
+import wave
+from pathlib import Path
 from contextlib import AsyncExitStack
 from importlib.metadata import version
 from uuid import uuid4
@@ -15,7 +17,7 @@ KEY = "labkey"
 SECRET = "local-lab-only-00000000000000000000000000000000"
 
 
-async def wait_audio(stream, hz=None):
+async def wait_audio(stream, hz=None, recording=None):
     buf = bytearray()
     consecutive = 0
     async for event in stream:
@@ -23,6 +25,8 @@ async def wait_audio(stream, hz=None):
         while len(buf) >= 800:
             block = bytes(buf[:800])
             del buf[:800]
+            if recording is not None:
+                recording.writeframesraw(block)
             if hz is None:
                 heard = np.max(np.abs(np.frombuffer(block, "<i2").astype(float))) > 250
             else:
@@ -33,7 +37,24 @@ async def wait_audio(stream, hz=None):
     raise RuntimeError("Remote audio ended before the expected signal")
 
 
+async def exchange_question(room, source, stream, directory):
+    with wave.open(str(directory / "question.wav"), "rb") as wav:
+        if (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) != (RATE, 1, 2):
+            raise ValueError("Question must be 8 kHz mono PCM16")
+        while pcm := wav.readframes(160):
+            await source.capture_frame(rtc.AudioFrame(pcm, RATE, 1, len(pcm) // 2))
+    await source.wait_for_playout()
+    await asyncio.sleep(0.25)
+    await room.local_participant.publish_dtmf(code=11, digit="#")
+    await asyncio.wait_for(wait_audio(stream, 1200), 8)
+    with wave.open(str(directory / "reply-heard.wav"), "wb") as wav:
+        wav.setparams((1, 2, RATE, 0, "NONE", ""))
+        await asyncio.wait_for(wait_audio(stream, 1400, recording=wav), 15)
+    print("Received simulated representative's answer over SIP")
+
+
 async def probe():
+    exchange = os.environ.get("CLAIMCALL_EXCHANGE_DIR")
     room_name = "sip-probe-" + uuid4().hex
     room = rtc.Room()
     incoming = asyncio.get_running_loop().create_future()
@@ -60,7 +81,7 @@ async def probe():
                                            transport="SIP_TRANSPORT_UDP", numbers=["7000"])))
         stack.push_async_callback(client.sip.delete_sip_trunk, api.DeleteSIPTrunkRequest(sip_trunk_id=trunk.sip_trunk_id))
         await client.sip.create_sip_participant(api.CreateSIPParticipantRequest(
-            sip_trunk_id=trunk.sip_trunk_id, sip_call_to="7001", room_name=room_name,
+            sip_trunk_id=trunk.sip_trunk_id, sip_call_to="7002" if exchange else "7001", room_name=room_name,
             participant_identity="insurer", wait_until_answered=True))
         stream = await asyncio.wait_for(incoming, 10)
         stack.push_async_callback(stream.aclose)
@@ -71,6 +92,9 @@ async def probe():
         print("Asterisk accepted digit 2")
         # Allow the marker to finish and Echo() to begin before transmitting.
         await asyncio.sleep(1.2)
+        if exchange:
+            await exchange_question(room, source, stream, Path(exchange))
+            return
         for pcm in tone_frames(980, samples_per_frame=160, frame_count=40):
             await source.capture_frame(rtc.AudioFrame(pcm, RATE, 1, 160))
         await source.wait_for_playout()

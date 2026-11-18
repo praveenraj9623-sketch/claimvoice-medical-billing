@@ -1,4 +1,5 @@
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends asterisk ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /var/lib/asterisk/sounds/claimcall && ffmpeg -v error -f lavfi -i "flite=text='For claim status press two':voice=slt" -ar 8000 -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/menu.ulaw
+RUN ffmpeg -v error -f lavfi -i "flite=text='This is Daniel. The claim is still pending. There is no payment information yet.':voice=slt" -ar 8000 -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/pending.ulaw
 CMD ["asterisk", "-f", "-U", "asterisk", "-G", "asterisk", "-vv"]

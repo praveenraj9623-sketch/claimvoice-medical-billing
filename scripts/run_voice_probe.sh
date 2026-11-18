@@ -2,6 +2,13 @@
 # Run inside Linux or WSL2, after installing the prerequisites in VOICE_PROBE.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+target=claimcall.audio_probe
+if [[ $# == 1 && $1 == --sip-pending ]]; then
+  target=claimcall.sip_exchange
+elif (( $# )); then
+  echo "Usage: $0 [--sip-pending]" >&2
+  exit 2
+fi
 for binary in llama-server ffmpeg curl; do
   command -v "$binary" >/dev/null || { echo "Missing $binary; see VOICE_PROBE.md" >&2; exit 1; }
 done
@@ -29,7 +36,7 @@ echo "Starting Qwen. First run downloads model files. Server log: $server_log"
 for ((attempt=0; attempt<900; attempt++)); do
   kill -0 "$server_pid" || { tail -n 10 "$server_log"; exit 1; }
   if curl -fs --max-time 2 http://127.0.0.1:8080/health >/dev/null; then
-    "$python_bin" -m claimcall.audio_probe --voice "$voice"
+    "$python_bin" -m "$target" --voice "$voice"
     exit 0
   fi
   sleep 2
