@@ -61,3 +61,25 @@ def test_positional_reference_preserves_leading_zero_and_rejects_gaps():
     assert probe.positional_reference("First zero. Second seven.") == "07"
     assert probe.positional_reference("First eight. Third four.") is None
     assert probe.positional_reference("First eighty four.") is None
+
+
+WSL_CLEAN = "1st digit is 8, 2nd digit is 8, 3rd digit is 4, 4th digit is 1."
+WSL_AMBIGUOUS = "First, eight, second, eight, third, fourth, fourth, one."
+
+
+def test_reported_wsl_transcripts_cannot_confirm_reference():
+    assert probe.positional_reference(WSL_CLEAN) == "8841"
+    repeated = WSL_CLEAN + " 2nd digit is 8," + " 3rd digit is 8," * 20 + " 3"
+    for first, expected in [(WSL_CLEAN, "8841"), (repeated, None)]:
+        replies = iter([first, WSL_AMBIGUOUS])
+        final, turns = probe.verify_reference("841", lambda _: next(replies))
+        assert [t["value"] for t in turns] == [expected, None]
+        assert final is None
+
+
+def test_cardinal_positions_confirm_independent_reading():
+    replies = iter([WSL_CLEAN, "Position one is 8. Position 2 is eight. Position 3 is 4. Position four is 1."])
+    assert probe.verify_reference("841", lambda _: next(replies))[0] == "8841"
+    assert probe.positional_reference("Position 1 is 0. Position two is 7.") == "07"
+    assert probe.positional_reference("Position one is two. Position three is five.") is None
+    assert probe.positional_reference("1st is 3. 2rd is 6.") is None

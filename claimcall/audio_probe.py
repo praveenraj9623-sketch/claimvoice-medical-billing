@@ -58,17 +58,27 @@ DIGITS = "zero one two three four five six seven eight nine".split()
 POSITIONS = "first second third fourth fifth sixth seventh eighth ninth tenth".split()
 
 
+ORDINALS = "1st 2nd 3rd 4th 5th 6th 7th 8th 9th 10th".split()
+CARDINALS = DIGITS[1:] + ["ten"]
+
+
 def positional_reference(text: str) -> str | None:
     """Accept only a complete sequence of explicitly numbered single digits."""
     words = re.findall(r"[a-z0-9]+", text.lower())
     digits = []
     while words and len(digits) < len(POSITIONS):
-        if words[:1] != [POSITIONS[len(digits)]]:
-            return None
-        words.pop(0)
-        for optional in ("digit", "is"):
-            if words[:1] == [optional]:
+        index = len(digits)
+        label = words.pop(0)
+        if label == "position":
+            if not words or words.pop(0) not in (CARDINALS[index], str(index + 1)):
+                return None
+        elif label in (POSITIONS[index], ORDINALS[index]):
+            if words[:1] == ["digit"]:
                 words.pop(0)
+        else:
+            return None
+        if words[:1] == ["is"]:
+            words.pop(0)
         if not words:
             return None
         token = words.pop(0)
@@ -81,8 +91,10 @@ def positional_reference(text: str) -> str | None:
     return "".join(digits) if digits and not words else None
 
 
-def transcribe(recognizer, audio):
-    segments, _ = recognizer.transcribe(str(audio), language="en", beam_size=1)
+def transcribe(recognizer, audio, *, reference_turn=False):
+    options = ({"beam_size": 3, "temperature": 0.0, "condition_on_previous_text": False}
+               if reference_turn else {"beam_size": 1})
+    segments, _ = recognizer.transcribe(str(audio), language="en", **options)
     return " ".join(segment.text.strip() for segment in segments).strip()
 
 
@@ -111,7 +123,7 @@ def simulator_repeat(case, attempt, directory):
         if attempt == 1:
             text = "First digit is eight. Second digit is eight. Third digit is four. Fourth digit is one."
         else:
-            text = "First, eight. Second, eight. Third, four. Fourth, one."
+            text = "Position one is eight. Position two is eight. Position three is four. Position four is one."
     else:
         text = "There is no payment reference available."
     return insurer_audio(text, directory, f"repeat-{attempt}")
@@ -182,8 +194,11 @@ def run_case(case, directory, recognizer, voice, threads_report):
             def repeat_turn(attempt):
                 prompt = ("Please repeat the payment reference, one digit at a time, "
                           "saying first digit, second digit, and so on.")
+                if attempt == 2:
+                    prompt = ("Please read the reference again. Say position one and its digit, "
+                              "then position two and its digit, and continue to the end.")
                 speak(voice, prompt, directory / f"request-{attempt}.wav")
-                return transcribe(recognizer, simulator_repeat(case, attempt, directory))
+                return transcribe(recognizer, simulator_repeat(case, attempt, directory), reference_turn=True)
 
             reference, turns = verify_reference(payment.reference, repeat_turn)
             report["reference_turns"] = turns
