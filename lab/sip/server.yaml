@@ -1,0 +1,11 @@
+port: 7880
+rtc:
+  node_ip: 172.29.231.10
+  use_external_ip: false
+  tcp_port: 7881
+  port_range_start: 15000
+  port_range_end: 15100
+redis:
+  address: redis:6379
+keys:
+  labkey: local-lab-only-00000000000000000000000000000000

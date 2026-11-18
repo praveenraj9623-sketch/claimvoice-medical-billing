@@ -1,0 +1,64 @@
+name: claimcall-sip-probe
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    networks: [lab]
+  server:
+    image: ${LIVEKIT_SERVER_IMAGE:-livekit/livekit-server:latest}
+    command: ["--config", "/lab/server.yaml"]
+    volumes: ["./server.yaml:/lab/server.yaml:ro"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      lab:
+        ipv4_address: 172.29.231.10
+  sip:
+    image: ${LIVEKIT_SIP_IMAGE:-livekit/sip:latest}
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: labkey
+        api_secret: local-lab-only-00000000000000000000000000000000
+        ws_url: ws://server:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+        local_net: 172.29.231.0/24
+        use_external_ip: false
+        rtp_port: 14000-14100
+    restart: "on-failure:3"
+    depends_on: [server]
+    networks:
+      lab:
+        ipv4_address: 172.29.231.11
+  insurer:
+    build:
+      context: .
+      dockerfile: Dockerfile.insurer
+    volumes:
+      - ./pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./extensions.conf:/etc/asterisk/extensions.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "asterisk -rx 'pjsip show endpoint lab' | grep -Eq 'Endpoint:[[:space:]]+lab(/|[[:space:]])'"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    networks:
+      lab:
+        ipv4_address: 172.29.231.12
+  probe:
+    build:
+      context: .
+      dockerfile: Dockerfile.probe
+    networks: [lab]
+networks:
+  lab:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.231.0/24
