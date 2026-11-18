@@ -11,13 +11,13 @@ services:
   server:
     image: ${LIVEKIT_SERVER_IMAGE:-livekit/livekit-server:latest}
     command: ["--config", "/lab/server.yaml"]
-    volumes: ["./server.yaml:/lab/server.yaml:ro"]
+    volumes: ["${CLAIMCALL_CONFIG_DIR:?Run scripts/run_sip_probe.sh}/server.yaml:/lab/server.yaml:ro"]
     depends_on:
       redis:
         condition: service_healthy
     networks:
       lab:
-        ipv4_address: 172.29.231.10
+        ipv4_address: ${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.10
   sip:
     image: ${LIVEKIT_SIP_IMAGE:-livekit/sip:latest}
     environment:
@@ -28,20 +28,20 @@ services:
         redis:
           address: redis:6379
         sip_port: 5060
-        local_net: 172.29.231.0/24
+        local_net: ${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.0/24
         use_external_ip: false
         rtp_port: 14000-14100
     restart: "on-failure:3"
     depends_on: [server]
     networks:
       lab:
-        ipv4_address: 172.29.231.11
+        ipv4_address: ${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.11
   insurer:
     build:
       context: .
       dockerfile: Dockerfile.insurer
     volumes:
-      - ./pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ${CLAIMCALL_CONFIG_DIR:?Run scripts/run_sip_probe.sh}/pjsip.conf:/etc/asterisk/pjsip.conf:ro
       - ./extensions.conf:/etc/asterisk/extensions.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "asterisk -rx 'pjsip show endpoint lab' | grep -Eq 'Endpoint:[[:space:]]+lab(/|[[:space:]])'"]
@@ -50,15 +50,17 @@ services:
       retries: 15
     networks:
       lab:
-        ipv4_address: 172.29.231.12
+        ipv4_address: ${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.12
   probe:
     build:
       context: .
       dockerfile: Dockerfile.probe
+    environment:
+      INSURER_ADDRESS: "${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.12:5060"
     networks: [lab]
 networks:
   lab:
     internal: true
     ipam:
       config:
-        - subnet: 172.29.231.0/24
+        - subnet: ${CLAIMCALL_PREFIX:?Run scripts/run_sip_probe.sh}.0/24

@@ -1,6 +1,6 @@
 # Private SIP transport check
 
-From the repository root in WSL2 Ubuntu, run `bash scripts/run_sip_probe.sh` with a running Docker engine and Compose v2. Run one instance at a time. Initial setup needs network access to build and pull images. The test uses an isolated Docker network, no published ports and a single internal extension, 7001. Its subnet is 172.29.231.0/24.
+From the repository root in WSL2 Ubuntu, run `bash scripts/run_sip_probe.sh` with a running Docker engine and Compose v2. Run one instance at a time. Initial setup needs network access to build and pull images. The test uses an isolated Docker network, no published ports and a single internal extension, 7001. The launcher inspects the active Docker engine’s network allocations and selects an unused private IPv4 /24 for this run. It writes the selected subnet to prerequisites.log and renders the LiveKit and Asterisk configuration in the same run directory.
 
 The caller joins a LiveKit room, publishes an audio track and dials Asterisk through LiveKit SIP. Asterisk allows only G.711 µ-law. The caller waits for menu audio and sends key 2. The successful menu branch plays 660 Hz and starts Echo(). The caller sends 980 Hz and must detect it coming back through the remote insurer track. A timeout, wrong route or missing echo fails the run.
 

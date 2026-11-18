@@ -1,5 +1,6 @@
 """Private transport probe. Asterisk emits 660 Hz only after receiving key 2."""
 import asyncio
+import os
 from contextlib import AsyncExitStack
 from importlib.metadata import version
 from uuid import uuid4
@@ -55,7 +56,7 @@ async def probe():
         track = rtc.LocalAudioTrack.create_audio_track("caller-audio", source)
         await room.local_participant.publish_track(track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE))
         trunk = await client.sip.create_sip_outbound_trunk(api.CreateSIPOutboundTrunkRequest(
-            trunk=api.SIPOutboundTrunkInfo(name=room_name, address="172.29.231.12:5060",
+            trunk=api.SIPOutboundTrunkInfo(name=room_name, address=os.environ["INSURER_ADDRESS"],
                                            transport="SIP_TRANSPORT_UDP", numbers=["7000"])))
         stack.push_async_callback(client.sip.delete_sip_trunk, api.DeleteSIPTrunkRequest(sip_trunk_id=trunk.sip_trunk_id))
         await client.sip.create_sip_participant(api.CreateSIPParticipantRequest(

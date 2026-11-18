@@ -15,6 +15,14 @@ docker context show >> "$log" 2>&1 || true
 engine_os=$(docker info --format '{{.OSType}}' 2>> "$log") || fail_setup "Docker engine unreachable. Start the engine and check the selected Docker context. See $log."
 echo "Engine OS: $engine_os" >> "$log"
 [[ "$engine_os" == "linux" ]] || fail_setup "This lab requires a Linux container engine. Check Docker Desktop's container mode."
+# Read every configured subnet, including networks without running containers.
+network_ids=$(docker network ls -q)
+mapfile -t ids <<< "$network_ids"
+docker network inspect --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' "${ids[@]}" > "$logdir/docker-subnets.txt"
+CLAIMCALL_CONFIG_DIR=$(cd "$logdir" && pwd)
+CLAIMCALL_PREFIX=$(python3 network.py "$CLAIMCALL_CONFIG_DIR" < "$logdir/docker-subnets.txt")
+export CLAIMCALL_PREFIX CLAIMCALL_CONFIG_DIR
+echo "Selected SIP lab subnet: $CLAIMCALL_PREFIX.0/24" | tee -a "$log"
 cleanup() {
   docker compose logs --no-color > "$logdir/services.log" 2>&1 || true
   docker compose down --remove-orphans >/dev/null
