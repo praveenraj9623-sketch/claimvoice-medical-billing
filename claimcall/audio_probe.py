@@ -1,6 +1,7 @@
 """Run one or more synthetic insurer turns through a local CPU voice stack."""
 import argparse
 import json
+import re
 import subprocess
 import sys
 import wave
@@ -39,14 +40,81 @@ CASES = {
 
 
 def phone_fixture(case: str, directory: Path) -> Path:
+    return insurer_audio(CASES[case][0], directory, "incoming")
+
+
+def insurer_audio(text: str, directory: Path, stem: str) -> Path:
     # Use a different synthesizer for the representative and the caller.
-    (directory / "utterance.txt").write_text(CASES[case][0], encoding="utf-8")
+    (directory / f"{stem}.txt").write_text(text, encoding="utf-8")
     subprocess.run([
         "ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "lavfi", "-i",
-        "flite=textfile=utterance.txt:voice=slt", "-ar", "8000", "-ac", "1",
-        "-c:a", "pcm_mulaw", "incoming.wav",
+        f"flite=textfile={stem}.txt:voice=slt", "-ar", "8000", "-ac", "1",
+        "-c:a", "pcm_mulaw", f"{stem}.wav",
     ], cwd=directory, check=True, timeout=30)
-    return directory / "incoming.wav"
+    return directory / f"{stem}.wav"
+
+
+DIGITS = "zero one two three four five six seven eight nine".split()
+POSITIONS = "first second third fourth fifth sixth seventh eighth ninth tenth".split()
+
+
+def positional_reference(text: str) -> str | None:
+    """Accept only a complete sequence of explicitly numbered single digits."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    digits = []
+    while words and len(digits) < len(POSITIONS):
+        if words[:1] != [POSITIONS[len(digits)]]:
+            return None
+        words.pop(0)
+        for optional in ("digit", "is"):
+            if words[:1] == [optional]:
+                words.pop(0)
+        if not words:
+            return None
+        token = words.pop(0)
+        if token in DIGITS:
+            digits.append(str(DIGITS.index(token)))
+        elif re.fullmatch(r"[0-9]", token):
+            digits.append(token)
+        else:
+            return None
+    return "".join(digits) if digits and not words else None
+
+
+def transcribe(recognizer, audio):
+    segments, _ = recognizer.transcribe(str(audio), language="en", beam_size=1)
+    return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+def speak(voice, text, path):
+    with wave.open(str(path), "wb") as wav:
+        voice.synthesize_wav(text, wav)
+
+
+def verify_reference(initial, repeat_turn):
+    # Two consecutive independent readings must agree. Never pad an identifier.
+    previous = initial
+    turns = []
+    for attempt in (1, 2):
+        transcript = repeat_turn(attempt)
+        value = positional_reference(transcript)
+        turns.append({"transcript": transcript, "value": value})
+        if value is not None and value == previous:
+            return value, turns
+        previous = value
+    return None, turns
+
+
+def simulator_repeat(case, attempt, directory):
+    # Private representative script. Caller and parser see only transcribed audio.
+    if case == "paid":
+        if attempt == 1:
+            text = "First digit is eight. Second digit is eight. Third digit is four. Fourth digit is one."
+        else:
+            text = "First, eight. Second, eight. Third, four. Fourth, one."
+    else:
+        text = "There is no payment reference available."
+    return insurer_audio(text, directory, f"repeat-{attempt}")
 
 
 def extract(transcript: str) -> ReportedPayment:
@@ -97,8 +165,7 @@ def run_case(case, directory, recognizer, voice, threads_report):
         incoming = phone_fixture(case, directory)
         stage = "recognition"
         before = perf_counter()
-        segments, _ = recognizer.transcribe(str(incoming), language="en", beam_size=1)
-        transcript = " ".join(segment.text.strip() for segment in segments).strip()
+        transcript = transcribe(recognizer, incoming)
         timings["recognition"] = perf_counter() - before
         report["transcript"] = transcript
         if not transcript:
@@ -107,16 +174,35 @@ def run_case(case, directory, recognizer, voice, threads_report):
         before = perf_counter()
         payment = extract(transcript)
         timings["tool_call"] = perf_counter() - before
+        report["initial_capture"] = payment.model_dump(mode="json")
+        if payment.status == "paid":
+            stage = "reference_check"
+            before = perf_counter()
+
+            def repeat_turn(attempt):
+                prompt = ("Please repeat the payment reference, one digit at a time, "
+                          "saying first digit, second digit, and so on.")
+                speak(voice, prompt, directory / f"request-{attempt}.wav")
+                return transcribe(recognizer, simulator_repeat(case, attempt, directory))
+
+            reference, turns = verify_reference(payment.reference, repeat_turn)
+            report["reference_turns"] = turns
+            report["reference_needs_review"] = reference is None
+            payment = payment.model_copy(update={"reference": reference})
+            timings["reference_check_including_fixture"] = perf_counter() - before
         report["captured"] = payment.model_dump(mode="json")
         report["mismatches"] = check_fields(payment, CASES[case][1])
         stage = "synthesis"
         reply = f"I heard the claim status as {payment.status}."
         if payment.amount_usd is not None:
             reply += f" The reported amount is {payment.amount_usd} dollars."
+        if payment.reference is not None and payment.status == "paid":
+            reply += " The payment reference is " + ", ".join(DIGITS[int(d)] for d in payment.reference) + "."
+        elif report.get("reference_needs_review"):
+            reply += " The payment reference needs review."
         reply += " Is that correct?"
         before = perf_counter()
-        with wave.open(str(directory / "reply.wav"), "wb") as wav:
-            voice.synthesize_wav(reply, wav)
+        speak(voice, reply, directory / "reply.wav")
         with wave.open(str(directory / "reply.wav"), "rb") as wav:
             if not wav.getnframes() or not any(wav.readframes(wav.getnframes())):
                 raise ValueError("Empty or silent reply audio")
