@@ -8,6 +8,14 @@ def tone(hz, samples):
     return (np.sin(phase) * 6000).astype("<i2").tobytes()
 
 
+def tone_frames(hz, samples_per_frame, frame_count):
+    """Split one continuous waveform into PCM frames without resetting its phase."""
+    waveform = tone(hz, samples_per_frame * frame_count)
+    frame_bytes = samples_per_frame * 2
+    for offset in range(0, len(waveform), frame_bytes):
+        yield waveform[offset:offset + frame_bytes]
+
+
 def matches(samples, hz):
     """A dominant sinusoid within a 50 ms block of narrowband audio."""
     signal = np.frombuffer(samples, dtype="<i2").astype(float)

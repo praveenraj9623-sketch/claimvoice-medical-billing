@@ -8,7 +8,7 @@ from uuid import uuid4
 import numpy as np
 from livekit import api, rtc
 
-from audio import RATE, matches, tone
+from audio import RATE, matches, tone_frames
 
 URL = "ws://server:7880"
 KEY = "labkey"
@@ -71,9 +71,8 @@ async def probe():
         print("Asterisk accepted digit 2")
         # Allow the marker to finish and Echo() to begin before transmitting.
         await asyncio.sleep(1.2)
-        frame = rtc.AudioFrame(tone(980, 160), RATE, 1, 160)
-        for _ in range(40):
-            await source.capture_frame(frame)
+        for pcm in tone_frames(980, samples_per_frame=160, frame_count=40):
+            await source.capture_frame(rtc.AudioFrame(pcm, RATE, 1, 160))
         await source.wait_for_playout()
         await asyncio.wait_for(wait_audio(stream, 980), 6)
         print("PASS: caller audio returned through Asterisk Echo()")
