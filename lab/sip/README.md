@@ -20,3 +20,13 @@ only the insurer transcript. The check expects the caller's billing/status
 question, representative Daniel, pending status, and three unknown payment fields.
 Inspect both received WAVs and result.json in the printed artifacts/sip-exchange
 directory. This exercises one scripted representative turn and offline capture.
+
+To investigate a completed call, pass its received WAV directory to
+`bash scripts/run_voice_probe.sh --sip-replay artifacts/sip-exchange/RUN_ID`.
+Replay starts the local extractor and reads both original recordings. It skips
+Docker and synthesis and writes a fresh result directory. Recognition uses a
+separate process and defaults to CT2_USE_MKL=0 for the CPU lab. A native crash
+leaves its exit code and recognition.log. The default speech model is base.en.
+To compare a larger model on the same audio, set CLAIMCALL_WHISPER_MODEL to a
+cached model directory or a faster-whisper model name (may download weights).
+Names and missing fields are checked against the same fixture on every run.

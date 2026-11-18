@@ -3,10 +3,11 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .audio_probe import CASES, check_fields, extract, speak, transcribe
+from .audio_probe import CASES, check_fields, extract, speak
 
 QUESTION = "Hello. This is the ambulance billing office. Could you tell me the status of this claim?"
 
@@ -24,24 +25,37 @@ def evaluate(question, reply, capture):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--voice", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--voice")
+    mode.add_argument("--replay", type=Path, help="Directory containing both received WAVs")
     args = parser.parse_args()
     directory = Path("artifacts/sip-exchange").resolve() / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     directory.mkdir(parents=True)
-    report = {"status": "failed"}
-    stage = "question synthesis"
+    recordings = args.replay.resolve() if args.replay else directory
+    report = {"status": "failed", "recordings": str(recordings), "replay": bool(args.replay)}
+    stage = "input recordings"
     try:
-        from piper import PiperVoice
-        speak(PiperVoice.load(args.voice), QUESTION, directory / "question-original.wav")
-        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(directory / "question-original.wav"),
-                        "-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", str(directory / "question.wav")], check=True)
-        stage = "SIP call"
-        subprocess.run(["bash", "scripts/run_sip_probe.sh", "--pending", str(directory)], check=True)
+        if args.voice:
+            stage = "question synthesis"
+            from piper import PiperVoice
+            speak(PiperVoice.load(args.voice), QUESTION, directory / "question-original.wav")
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(directory / "question-original.wav"),
+                            "-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", str(directory / "question.wav")], check=True)
+            stage = "SIP call"
+            subprocess.run(["bash", "scripts/run_sip_probe.sh", "--pending", str(directory)], check=True)
+        for filename in ("question-heard.wav", "reply-heard.wav"):
+            if not (recordings / filename).is_file():
+                raise FileNotFoundError(recordings / filename)
         stage = "recognition"
-        from faster_whisper import WhisperModel
-        recognizer = WhisperModel("base.en", device="cpu", compute_type="int8", cpu_threads=4)
-        for role, stem in (("caller", "question"), ("insurer", "reply")):
-            report[role] = transcribe(recognizer, directory / f"{stem}-heard.wav")
+        transcripts = directory / "transcripts.json"
+        log = directory / "recognition.log"
+        with log.open("w", encoding="utf-8") as out:
+            worker = subprocess.run([sys.executable, "-m", "claimcall.recognize_exchange",
+                                     str(recordings), str(transcripts)], stdout=out, stderr=subprocess.STDOUT)
+        if worker.returncode:
+            report["recognition_exit_code"] = worker.returncode
+            raise RuntimeError(f"Recognition worker exited {worker.returncode}. See {log}")
+        report.update(json.loads(transcripts.read_text(encoding="utf-8")))
         stage = "capture"
         report.update(evaluate(report["caller"], report["insurer"], extract))
         report["status"] = "mismatch" if report["mismatches"] else "passed"
