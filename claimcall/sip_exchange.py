@@ -9,6 +9,8 @@ from pathlib import Path
 
 from .audio_probe import CASES, check_fields, extract, speak
 
+RECOGNITION_WORKER = Path(__file__).resolve().with_name("recognize_exchange.py")
+
 QUESTION = "Hello. This is the ambulance billing office. Could you tell me the status of this claim?"
 
 
@@ -50,7 +52,7 @@ def main():
         transcripts = directory / "transcripts.json"
         log = directory / "recognition.log"
         with log.open("w", encoding="utf-8") as out:
-            worker = subprocess.run([sys.executable, "-m", "claimcall.recognize_exchange",
+            worker = subprocess.run([sys.executable, str(RECOGNITION_WORKER),
                                      str(recordings), str(transcripts)], stdout=out, stderr=subprocess.STDOUT)
         if worker.returncode:
             report["recognition_exit_code"] = worker.returncode

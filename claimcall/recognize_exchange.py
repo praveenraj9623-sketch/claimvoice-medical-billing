@@ -10,7 +10,7 @@ def recognize(recordings):
     os.environ.setdefault("CT2_USE_MKL", "0")
     from faster_whisper import WhisperModel
 
-    model_name = os.environ.get("CLAIMCALL_WHISPER_MODEL", "base.en")
+    model_name = os.environ.get("CLAIMCALL_WHISPER_MODEL", "small.en")
     model = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=4)
     result = {"model": model_name, "ct2_use_mkl": os.environ["CT2_USE_MKL"]}
     for role, filename in (("caller", "question-heard.wav"), ("insurer", "reply-heard.wav")):

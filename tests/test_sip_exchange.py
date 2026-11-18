@@ -45,8 +45,8 @@ def test_replay_native_worker_failure_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["sip_exchange", "--replay", str(recordings)])
 
     def crash(command, stdout, stderr):
-        assert command[1:3] == ["-m", "claimcall.recognize_exchange"]
-        assert command[3] == str(recordings)
+        assert command[:2] == [sys.executable, str(sip_exchange.RECOGNITION_WORKER)]
+        assert command[2] == str(recordings)
         stdout.write("native library load failed")
         return subprocess.CompletedProcess(command, 2)
 
@@ -66,3 +66,33 @@ def test_reported_mishearing_remains_a_mismatch():
                       "This is manual. The claim is still pending.", lambda _: payment)
     assert set(result["mismatches"]) == {"caller question", "representative"}
     assert result["captured"]["representative"] == "manual"
+
+
+def test_worker_launches_from_outside_checkout(tmp_path, monkeypatch):
+    import json
+    import sys
+    from claimcall import sip_exchange
+
+    # Only the speech model is stubbed. The child interpreter, CLI and I/O are real.
+    (tmp_path / "faster_whisper.py").write_text(
+        "from pathlib import Path\n"
+        "from types import SimpleNamespace\n"
+        "class WhisperModel:\n"
+        "    def __init__(self, *args, **kwargs): pass\n"
+        "    def transcribe(self, path, **kwargs):\n"
+        "        return [SimpleNamespace(text=Path(path).read_text())], None\n"
+    )
+    (tmp_path / "question-heard.wav").write_text("Billing office asking for claim status.")
+    (tmp_path / "reply-heard.wav").write_text("This is Daniel. The claim is pending.")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    monkeypatch.setenv("PYTHONSAFEPATH", "1")
+    monkeypatch.delenv("CLAIMCALL_WHISPER_MODEL", raising=False)
+    monkeypatch.setattr(sys, "argv", ["sip_exchange", "--replay", str(tmp_path)])
+    monkeypatch.setattr(sip_exchange, "extract", lambda _: CASES["pending"][1])
+    assert sip_exchange.main() == 0
+    path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
+    result = json.loads(path.read_text())
+    assert result["model"] == "small.en"
+    assert result["insurer"] == "This is Daniel. The claim is pending."
+    assert result["mismatches"] == []
