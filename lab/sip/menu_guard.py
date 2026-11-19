@@ -1,10 +1,8 @@
 """Check the lab insurer's spoken menu against its approved claim-status route."""
 import argparse
 import json
-import os
 from pathlib import Path
 import re
-from time import monotonic, sleep
 
 EXPECTED = "2"
 DIGITS = "zero one two three four five six seven eight nine".split()
@@ -32,32 +30,11 @@ def publish(path, value):
     pending.replace(path)
 
 
-def run(directory):
-    os.environ.setdefault("CT2_USE_MKL", "0")
-    from faster_whisper import WhisperModel
-
-    model = WhisperModel(os.environ.get("CLAIMCALL_WHISPER_MODEL", "small.en"), device="cpu",
-                         compute_type="int8", cpu_threads=4, local_files_only=True)
-    (directory / "ready").touch()
-    wav = directory / "menu-heard.wav"
-    deadline = monotonic() + 120
-    while not wav.exists():
-        if monotonic() >= deadline:
-            raise TimeoutError("No complete received menu WAV")
-        sleep(0.1)
-    segments, _ = model.transcribe(str(wav), language="en", beam_size=5, temperature=0,
-                                   condition_on_previous_text=False)
-    transcript = " ".join(segment.text.strip() for segment in segments).strip()
-    publish(directory / "menu-decision.json", decide(transcript))
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("directory", type=Path)
-    directory = parser.parse_args().directory
-    try:
-        run(directory)
-    except Exception as exc:
-        publish(directory / "menu-decision.json", {"decision": "review_required", "reason": "recognition_error",
-                                                    "error": str(exc), "expected_digit": EXPECTED, "heard_digit": None})
-        raise
+    parser = argparse.ArgumentParser(description="Check an offline menu preflight transcript")
+    parser.add_argument("reading", type=Path)
+    parser.add_argument("--expect-digit", required=True, choices=("2", "3"))
+    args = parser.parse_args()
+    decision = decide(json.loads(args.reading.read_text())["transcript"])
+    print(json.dumps(decision, indent=2))
+    raise SystemExit(int(decision["heard_digit"] != args.expect_digit))

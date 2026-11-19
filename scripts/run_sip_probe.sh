@@ -3,7 +3,7 @@ set -euo pipefail
 exchange=""
 case_name=""
 extension=7001
-if [[ $# == 1 && ( $1 == --menu-control || $1 == --menu-changed ) ]]; then
+if [[ $# == 1 && ( $1 == --menu-control || $1 == --menu-changed || $1 == --menu-preflight ) ]]; then
   case_name=${1#--}
   extension=7004
   if [[ $case_name == menu-changed ]]; then extension=7005; fi
@@ -13,7 +13,7 @@ elif [[ $# == 2 && ( $1 == --pending || $1 == --paid ) && -s "$2/question.wav" ]
   extension=7002
   if [[ $case_name == paid ]]; then extension=7003; fi
 elif (( $# )); then
-  echo "Usage: $0 [--menu-control | --menu-changed | --pending DIRECTORY | --paid DIRECTORY]" >&2
+  echo "Usage: $0 [--menu-preflight | --menu-control | --menu-changed | --pending DIRECTORY | --paid DIRECTORY]" >&2
   exit 2
 fi
 python_bin="${PROBE_PYTHON:-python3}"
@@ -27,6 +27,33 @@ fail_setup() {
   echo "$1" | tee -a "$log" >&2
   exit 1
 }
+repo_root=$(cd ../.. && pwd)
+run_menu_worker() (
+  cd "$repo_root"
+  export CT2_USE_MKL="${CT2_USE_MKL-0}"
+  exec "$python_bin" "$repo_root/claimcall/recognize_exchange.py" "$1" "$1/menu-transcript.json" --menu
+)
+report_worker_failure() {
+  local status=$1 directory=$2
+  echo "Recognizer exit $status. See $directory/recognition.log" | tee -a "$log" >&2
+  "$python_bin" "$repo_root/scripts/diagnose_menu_loader.py" > "$directory/loader.log" 2>&1 || true
+  echo "Native dependency diagnostics: $directory/loader.log" >&2
+  exit "$status"
+}
+if [[ $case_name == menu-preflight ]]; then
+  for digit in 2 3; do
+    word=two
+    if [[ $digit == 3 ]]; then word=three; fi
+    directory="$(cd "$logdir" && pwd)/menu-$digit"
+    mkdir "$directory"
+    ffmpeg -v error -nostdin -f lavfi -i "flite=text='For claim status press $word':voice=slt" \
+      -ar 8000 -ac 1 -c:a pcm_mulaw "$directory/menu-heard.wav"
+    run_menu_worker "$directory" > "$directory/recognition.log" 2>&1 || report_worker_failure "$?" "$directory"
+    "$python_bin" menu_guard.py "$directory/menu-transcript.json" --expect-digit "$digit"
+  done
+  echo "PASS: both offline menu recordings were recognized"
+  exit 0
+fi
 command -v docker > "$log" || fail_setup "Docker CLI unavailable in this shell. Check Docker Desktop WSL integration for this Ubuntu distribution."
 docker compose version >> "$log" 2>&1 || fail_setup "Compose unavailable. Check the Compose plugin or Docker Desktop WSL integration. See $log."
 docker context show >> "$log" 2>&1 || true
@@ -65,11 +92,17 @@ options=()
 if [[ -n "$case_name" ]]; then
   menu_dir="$CLAIMCALL_CONFIG_DIR/menu"
   mkdir "$menu_dir"
-  "$python_bin" menu_guard.py "$menu_dir" > "$menu_dir/recognition.log" 2>&1 &
+  run_menu_worker "$menu_dir" > "$menu_dir/recognition.log" 2>&1 &
   menu_pid=$!
   for ((i=0; i<120; i++)); do
     [[ -f "$menu_dir/ready" ]] && break
-    kill -0 "$menu_pid" 2>/dev/null || fail_setup "Menu recognizer startup failed. See $menu_dir/recognition.log"
+    if ! kill -0 "$menu_pid" 2>/dev/null; then
+      status=0
+      wait "$menu_pid" || status=$?
+      menu_pid=""
+      if (( status == 0 )); then status=1; fi
+      report_worker_failure "$status" "$menu_dir"
+    fi
     sleep 1
   done
   [[ -f "$menu_dir/ready" ]] || fail_setup "Menu recognizer startup timed out."

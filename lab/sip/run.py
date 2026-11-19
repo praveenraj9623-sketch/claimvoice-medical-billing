@@ -11,7 +11,7 @@ from uuid import uuid4
 import numpy as np
 from livekit import api, rtc
 
-from menu_guard import EXPECTED, publish
+from menu_guard import EXPECTED, decide, publish
 from audio import RATE, matches, tone_frames
 
 URL = "ws://server:7880"
@@ -67,15 +67,16 @@ async def check_menu(room, stream, directory):
                                                       "audio": "recording.wav", "sent_digits": []})
             return False
     temporary.replace(directory / "menu-heard.wav")
-    path = directory / "menu-decision.json"
+    path = directory / "menu-transcript.json"
     async def receive():
         while not path.exists():
             await asyncio.sleep(0.1)
-        return json.loads(path.read_text(encoding="utf-8"))
+        return decide(json.loads(path.read_text(encoding="utf-8"))["transcript"])
     try:
         decision = await asyncio.wait_for(receive(), 18)
     except asyncio.TimeoutError:
         decision = {"decision": "review_required", "reason": "recognition_timeout"}
+    publish(directory / "menu-decision.json", decision)
     outcome = {**decision, "sent_digits": []}
     if decision.get("decision") == "authorized" and decision.get("heard_digit") == EXPECTED:
         await asyncio.sleep(0.35)  # Asterisk finishes the marker before listening for DTMF.

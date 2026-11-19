@@ -52,7 +52,7 @@ def test_received_menu_gates_keypad(tmp_path, monkeypatch, transcript, case, exp
             await asyncio.sleep(0.01)
         with wave.open(str(tmp_path / "menu-heard.wav")) as wav:
             assert wav.getnframes() == 1200
-        runner.publish(tmp_path / "menu-decision.json", decide(transcript))
+        runner.publish(tmp_path / "menu-transcript.json", {"transcript": transcript})
 
     async def run():
         room = SimpleNamespace(local_participant=SimpleNamespace(publish_dtmf=keypad))

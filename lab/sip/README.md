@@ -51,9 +51,12 @@ In WSL, activate the same Python environment with the cached small.en speech
 model used for paid calls. Run these commands from the repository root:
 
 ```bash
-bash scripts/run_sip_probe.sh --menu-control
-bash scripts/run_sip_probe.sh --menu-changed
+bash scripts/run_sip_probe.sh --menu-preflight &&
+  bash scripts/run_sip_probe.sh --menu-control &&
+  bash scripts/run_sip_probe.sh --menu-changed
 ```
+
+Preflight uses host FFmpeg with the flite filter to generate both spoken menus. It runs the same cached CPU recognizer as the caller, without starting Docker or placing a call. Set `PROBE_PYTHON` to the existing environment’s Python if it is not active. On a worker failure, inspect `menu-2/recognition.log` or `menu-3/recognition.log` and the adjacent `loader.log` under the printed run directory.
 
 The control offers key 2. The changed menu offers key 3. The caller records the
 received SIP audio through the end-of-menu tone and a local Whisper worker
