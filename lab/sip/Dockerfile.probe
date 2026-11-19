@@ -1,0 +1,5 @@
+FROM python:3.12-slim
+WORKDIR /probe
+RUN pip install --no-cache-dir 'livekit>=1.0,<2' 'livekit-api>=1.0,<2' 'numpy>=1.26,<3'
+COPY audio.py menu_guard.py run.py ./
+CMD ["python", "-u", "run.py"]
