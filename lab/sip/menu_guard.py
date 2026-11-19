@@ -11,7 +11,11 @@ DIGITS = "zero one two three four five six seven eight nine".split()
 def decide(transcript):
     # Only authorize a single, affirmative claim-status instruction.
     text = re.sub(r"[.,?!]", " ", transcript.casefold())
-    match = re.fullmatch(r"for claims? status (?:please )?press (?:the number )?([a-z]+|[0-9])", " ".join(text.split()))
+    match = re.fullmatch(
+        r"(?:for claims? status|to check the status of your claim) "
+        r"(?:please )?press (?:the number )?([a-z]+|[0-9])",
+        " ".join(text.split()),
+    )
     digit = None
     if match:
         word = match.group(1)

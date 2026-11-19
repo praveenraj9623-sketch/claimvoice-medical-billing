@@ -16,6 +16,11 @@ from lab.sip.verify_menu import passed
 @pytest.mark.parametrize("transcript,key", [
     ("For claim status, press two.", "2"), ("For claims status please press 2.", "2"),
     ("For claim status press three.", "3"),
+    ("To check the status of your claim, please press the number 2.", "2"),
+    ("To check the status of your claim. Please press the number three.", "3"),
+    ("To check the status of your clean, please press the number 2.", None),
+    ("To check the status of your payment, please press the number 2.", None),
+    ("To check the status of your claim, please press the number 2 or 3.", None),
     ("For claim status. Please press the number three.", "3"),
     ("For claim status please press the number 2.", "2"),
     ("For claim status please press the number free.", None), ("For claim status press 0.", "0"),
