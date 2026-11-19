@@ -84,6 +84,10 @@ export CLAIMCALL_PREFIX CLAIMCALL_CONFIG_DIR
 echo "Selected SIP lab subnet: $CLAIMCALL_PREFIX.0/24" | tee -a "$log"
 menu_pid=""
 cleanup() {
+  if [[ -n "$exchange" && -s "$CLAIMCALL_CONFIG_DIR/menu/menu-result.json" ]]; then
+    cp "$CLAIMCALL_CONFIG_DIR/menu/menu-result.json" "$exchange/menu-result.json" ||
+      echo "Could not copy menu decision to the exchange report directory" >&2
+  fi
   if [[ -n "$menu_pid" ]]; then
     kill "$menu_pid" 2>/dev/null || true
     wait "$menu_pid" 2>/dev/null || true

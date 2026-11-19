@@ -12,7 +12,7 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
 CASES = {"Paid claim": "--sip-paid", "Pending claim": "--sip-pending"}
-RESULT_LINE = re.compile(r"^(?:passed|failed|mismatch): (.+/result\.json)$", re.MULTILINE)
+RESULT_LINE = re.compile(r"^(?:passed|failed|mismatch|review_required): (.+/result\.json)$", re.MULTILINE)
 REQUIRED_COMMANDS = ("bash", "flock", "docker", "llama-server", "ffmpeg", "curl")
 
 
@@ -51,6 +51,13 @@ def render_result(path):
     except (OSError, ValueError):
         st.warning("The run reported a result file that could not be read.")
         return
+    if result.get("status") == "review_required":
+        st.warning("The phone menu needs review.")
+    if menu := result.get("menu"):
+        st.subheader("Phone menu")
+        st.text(menu.get("transcript") or "No transcript available")
+        st.write("Decision", menu.get("reason") or "No reason recorded")
+        st.write("Keys sent", ", ".join(menu.get("sent_digits", [])) or "None")
     if result.get("error"):
         st.warning(f"{result.get('failed_stage', 'Call')}: {result['error']}")
     if result.get("captured"):
@@ -88,6 +95,8 @@ def call_status(ready):
         st.warning("Another call started from this console is already running.")
     elif exit_code == 0:
         st.success("Call completed")
+    elif re.search(r"^review_required: ", progress, re.MULTILINE):
+        st.warning("Call stopped for review")
     else:
         st.error(f"Run ended with exit code {exit_code}. Check the result and worker log.")
     path = saved_result(progress)

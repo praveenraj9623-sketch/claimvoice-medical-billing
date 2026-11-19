@@ -242,3 +242,33 @@ def test_paid_replay_decodes_the_two_received_reference_wavs(tmp_path, monkeypat
     audit = json.loads(path.with_name("reference-audit.json").read_text())
     assert audit["decision"] == "verified"
     assert audit["evidence"][1]["quote"] == recordings["reference-2"]
+
+
+def test_sip_menu_rejection_is_saved_as_review_required(tmp_path, monkeypatch, capsys):
+    import json
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    from claimcall import sip_exchange
+
+    menu = {"transcript": "For clean status press two.", "decision": "review_required",
+            "reason": "unrecognized_menu", "sent_digits": []}
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["sip_exchange", "--voice", "test.onnx"])
+
+    def run(command, **kwargs):
+        if command[0] == "bash":
+            assert command[1:3] == ["scripts/run_sip_probe.sh", "--pending"]
+            (Path(command[-1]) / "menu-result.json").write_text(json.dumps(menu))
+            raise subprocess.CalledProcessError(1, command)
+        assert str(sip_exchange.RECOGNITION_WORKER) not in command
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert sip_exchange.main() == 1
+    path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
+    report = json.loads(path.read_text())
+    assert report["status"] == "review_required"
+    assert report["menu"] == menu
+    assert "captured" not in report
+    assert f"review_required: {path}" in capsys.readouterr().out

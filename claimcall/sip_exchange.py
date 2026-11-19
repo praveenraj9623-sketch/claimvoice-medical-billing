@@ -79,7 +79,12 @@ def main():
                                 "-ar", "8000", "-ac", "1", "-c:a", "pcm_s16le", str(directory / f"{stem}.wav")],
                                check=True)
             stage = "SIP call"
-            subprocess.run(["bash", "scripts/run_sip_probe.sh", f"--{args.case}", str(directory)], check=True)
+            try:
+                subprocess.run(["bash", "scripts/run_sip_probe.sh", f"--{args.case}", str(directory)], check=True)
+            finally:
+                menu_result = directory / "menu-result.json"
+                if menu_result.is_file():
+                    report["menu"] = json.loads(menu_result.read_text(encoding="utf-8"))
         for filename in ("question-heard.wav", "reply-heard.wav"):
             if not (recordings / filename).is_file():
                 raise FileNotFoundError(recordings / filename)
@@ -110,7 +115,10 @@ def main():
                                reference_readings=report.get("reference_readings", ())))
         report["status"] = "mismatch" if report["mismatches"] else "passed"
     except Exception as exc:
-        report.update(failed_stage=stage, error=str(exc))
+        if stage == "SIP call" and report.get("menu", {}).get("decision") == "review_required":
+            report["status"] = "review_required"
+        else:
+            report.update(failed_stage=stage, error=str(exc))
     path = directory / "result.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"{report['status']}: {path}", flush=True)
