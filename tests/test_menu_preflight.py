@@ -18,7 +18,7 @@ def test_menu_preflight_without_call(tmp_path, exit_code):
         pytest.skip("requires FFmpeg flite")
     root = Path(__file__).resolve().parents[1]
     for path in ("scripts/run_sip_probe.sh", "scripts/diagnose_menu_loader.py",
-                 "claimcall/recognize_exchange.py", "lab/sip/menu_guard.py"):
+                 "claimcall/recognize_exchange.py", "lab/sip/menu_guard.py", "lab/sip/render_menu.sh"):
         dst = tmp_path / path
         dst.parent.mkdir(exist_ok=True, parents=True)
         shutil.copyfile(root / path, dst)

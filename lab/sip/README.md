@@ -58,7 +58,7 @@ bash scripts/run_sip_probe.sh --menu-preflight &&
 
 Preflight uses host FFmpeg with the flite filter to generate both spoken menus. It runs the same cached CPU recognizer as the caller, without starting Docker or placing a call. Set `PROBE_PYTHON` to the existing environment’s Python if it is not active. On a worker failure, inspect `menu-2/recognition.log` or `menu-3/recognition.log` and the adjacent `loader.log` under the printed run directory.
 
-The control offers key 2. The changed menu offers key 3. The caller records the
+The control offers key 2. The changed menu uses a second simulated voice saying “For claim status. Please press the number three.” Both preflight and Asterisk use `render_menu.sh` to generate their prompts. A transcript such as “press free” leaves the digit unknown and routes to review. It does not count as recognition of the changed digit. The caller records the
 received SIP audio through the end-of-menu tone and a local Whisper worker
 transcribes it before the caller can send a key. Only a single explicit
 claim-status instruction matching the approved key 2 authorizes navigation.

@@ -15,7 +15,10 @@ from lab.sip.verify_menu import passed
 
 @pytest.mark.parametrize("transcript,key", [
     ("For claim status, press two.", "2"), ("For claims status please press 2.", "2"),
-    ("For claim status press three.", "3"), ("For claim status press 0.", "0"),
+    ("For claim status press three.", "3"),
+    ("For claim status. Please press the number three.", "3"),
+    ("For claim status please press the number 2.", "2"),
+    ("For claim status please press the number free.", None), ("For claim status press 0.", "0"),
     ("For payments press two.", None), ("For claim status do not press two.", None),
     ("For claim status press two or three.", None), ("", None),
 ])
@@ -28,6 +31,7 @@ def test_only_one_explicit_matching_route_is_authorized(transcript, key):
 @pytest.mark.parametrize("transcript,case,expected", [
     ("For claim status press two.", "menu-control", ["2"]),
     ("For claim status press three.", "menu-changed", []),
+    ("For claim status, press free.", "menu-changed", []),
     ("Unclear.", "menu-changed", []),
 ])
 def test_received_menu_gates_keypad(tmp_path, monkeypatch, transcript, case, expected):
@@ -64,6 +68,8 @@ def test_received_menu_gates_keypad(tmp_path, monkeypatch, transcript, case, exp
     assert result["sent_digits"] == emitted == expected
     assert result["transcript"] == transcript
     receiver = "CLAIMCALL_MENU_EXIT digit=[" + "".join(emitted) + "]"
-    assert passed(case, result, receiver) == (transcript != "Unclear.")
+    assert passed(case, result, receiver) == (result["heard_digit"] is not None)
+    if result["heard_digit"] is None:
+        assert (result["reason"], result["decision"]) == ("unrecognized_menu", "review_required")
     assert not passed(case, result, "")
     assert not passed(case, result, "CLAIMCALL_MENU_EXIT digit=[9]")

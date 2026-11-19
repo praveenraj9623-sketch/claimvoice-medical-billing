@@ -42,12 +42,9 @@ report_worker_failure() {
 }
 if [[ $case_name == menu-preflight ]]; then
   for digit in 2 3; do
-    word=two
-    if [[ $digit == 3 ]]; then word=three; fi
     directory="$(cd "$logdir" && pwd)/menu-$digit"
     mkdir "$directory"
-    ffmpeg -v error -nostdin -f lavfi -i "flite=text='For claim status press $word':voice=slt" \
-      -ar 8000 -ac 1 -c:a pcm_mulaw "$directory/menu-heard.wav"
+    sh render_menu.sh "$digit" "$directory/menu-heard.wav"
     run_menu_worker "$directory" > "$directory/recognition.log" 2>&1 || report_worker_failure "$?" "$directory"
     "$python_bin" menu_guard.py "$directory/menu-transcript.json" --expect-digit "$digit"
   done
