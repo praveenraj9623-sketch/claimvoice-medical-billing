@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .reference_audit import audit_files
 from .audio_probe import CASES, check_fields, extract, positional_reference
 
 RECOGNITION_WORKER = Path(__file__).resolve().with_name("recognize_exchange.py")
@@ -113,6 +114,13 @@ def main():
     path = directory / "result.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"{report['status']}: {path}", flush=True)
+    if args.case == "paid" and "captured" in report:
+        audit = audit_files(path, directory / "transcripts.json")
+        audit_path = directory / "reference-audit.json"
+        audit_path.write_text(json.dumps(audit, indent=2), encoding="utf-8")
+        print(f"Payment reference {audit['decision']}: {audit_path}", flush=True)
+        if audit["review_required"]:
+            return 1
     return int(report["status"] != "passed")
 
 

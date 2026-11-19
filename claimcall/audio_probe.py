@@ -1,7 +1,6 @@
 """Run one or more synthetic insurer turns through a local CPU voice stack."""
 import argparse
 import json
-import re
 import subprocess
 import sys
 import wave
@@ -13,6 +12,8 @@ from typing import Literal
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from .reference_digits import DIGITS, positional_reference
 
 
 class ReportedPayment(BaseModel):
@@ -52,43 +53,6 @@ def insurer_audio(text: str, directory: Path, stem: str) -> Path:
         "-c:a", "pcm_mulaw", f"{stem}.wav",
     ], cwd=directory, check=True, timeout=30)
     return directory / f"{stem}.wav"
-
-
-DIGITS = "zero one two three four five six seven eight nine".split()
-POSITIONS = "first second third fourth fifth sixth seventh eighth ninth tenth".split()
-
-
-ORDINALS = "1st 2nd 3rd 4th 5th 6th 7th 8th 9th 10th".split()
-CARDINALS = DIGITS[1:] + ["ten"]
-
-
-def positional_reference(text: str) -> str | None:
-    """Accept only a complete sequence of explicitly numbered single digits."""
-    words = re.findall(r"[a-z0-9]+", text.lower())
-    digits = []
-    while words and len(digits) < len(POSITIONS):
-        index = len(digits)
-        label = words.pop(0)
-        if label == "position":
-            if not words or words.pop(0) not in (CARDINALS[index], str(index + 1)):
-                return None
-        elif label in (POSITIONS[index], ORDINALS[index]):
-            if words[:1] == ["digit"]:
-                words.pop(0)
-        else:
-            return None
-        if words[:1] == ["is"]:
-            words.pop(0)
-        if not words:
-            return None
-        token = words.pop(0)
-        if token in DIGITS:
-            digits.append(str(DIGITS.index(token)))
-        elif re.fullmatch(r"[0-9]", token):
-            digits.append(token)
-        else:
-            return None
-    return "".join(digits) if digits and not words else None
 
 
 def transcribe(recognizer, audio, *, reference_turn=False):

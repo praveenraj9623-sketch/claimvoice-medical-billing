@@ -30,3 +30,17 @@ leaves its exit code and recognition.log. The SIP exchange defaults to small.en.
 To compare another model on the same audio, set CLAIMCALL_WHISPER_MODEL to a
 cached model directory or a faster-whisper model name (may download weights).
 Names and missing fields are checked against the same fixture on every run.
+
+### Audit a saved paid reference
+
+New paid exchanges and paid replays save `reference-audit.json` beside the
+capture result. The audit checks the final reference against the two numbered
+clarifications in the recognition worker's separate `transcripts.json`. Each
+finding includes the exact quotes and the digits parsed from each. A verified
+reference only establishes agreement with those transcripts.
+
+For an existing run, use `python -m claimcall.reference_audit path/to/result.json`.
+It prints JSON and reads the saved files without changing them. Exit 0 means
+verified, 1 means the field needs review, and 2 means the audit inputs could
+not be read or validated. To test a deliberately altered copy, pass the copy as
+the record and `--transcripts path/to/original/transcripts.json` as its evidence.

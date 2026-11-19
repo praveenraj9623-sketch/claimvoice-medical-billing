@@ -239,3 +239,6 @@ def test_paid_replay_decodes_the_two_received_reference_wavs(tmp_path, monkeypat
     assert report["initial_capture"]["reference"] == "841"
     assert report["captured"]["reference"] == "8841"
     assert [turn["value"] for turn in report["reference_turns"]] == ["8841", "8841"]
+    audit = json.loads(path.with_name("reference-audit.json").read_text())
+    assert audit["decision"] == "verified"
+    assert audit["evidence"][1]["quote"] == recordings["reference-2"]
