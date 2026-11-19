@@ -33,7 +33,7 @@ def recognize_menu(directory):
                       "ld_preload": os.environ.get("LD_PRELOAD")}), flush=True)
     name, model = load_model(cached_only=True)
     (directory / "ready").touch()
-    wav = directory / "menu-heard.wav"
+    wav = directory / "menu-speech.wav"
     deadline = monotonic() + 120
     while not wav.exists():
         if monotonic() >= deadline:

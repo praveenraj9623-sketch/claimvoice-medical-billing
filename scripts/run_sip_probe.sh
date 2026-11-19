@@ -7,13 +7,17 @@ if [[ $# == 1 && ( $1 == --menu-control || $1 == --menu-changed || $1 == --menu-
   case_name=${1#--}
   extension=7004
   if [[ $case_name == menu-changed ]]; then extension=7005; fi
+elif [[ $# == 2 && ( $1 == --menu-replay-control || $1 == --menu-replay-changed ) ]]; then
+  [[ -s "$2" ]] || { echo "Missing received menu WAV: $2" >&2; exit 2; }
+  recording=$(realpath -- "$2")
+  case_name=${1#--}
 elif [[ $# == 2 && ( $1 == --pending || $1 == --paid ) && -s "$2/question.wav" ]]; then
   case_name=${1#--}
   exchange=$(cd "$2" && pwd)
   extension=7002
   if [[ $case_name == paid ]]; then extension=7003; fi
 elif (( $# )); then
-  echo "Usage: $0 [--menu-preflight | --menu-control | --menu-changed | --pending DIRECTORY | --paid DIRECTORY]" >&2
+  echo "Usage: $0 [--menu-preflight | --menu-replay-control WAV | --menu-replay-changed WAV | --menu-control | --menu-changed | --pending DIRECTORY | --paid DIRECTORY]" >&2
   exit 2
 fi
 python_bin="${PROBE_PYTHON:-python3}"
@@ -40,13 +44,26 @@ report_worker_failure() {
   echo "Native dependency diagnostics: $directory/loader.log" >&2
   exit "$status"
 }
+check_menu_recording() {
+  local directory=$1 digit=$2
+  run_menu_worker "$directory" > "$directory/recognition.log" 2>&1 || report_worker_failure "$?" "$directory"
+  "$python_bin" menu_guard.py "$directory/menu-transcript.json" --expect-digit "$digit" | tee "$directory/menu-decision.json"
+}
+if [[ $case_name == menu-replay-* ]]; then
+  directory="$(cd "$logdir" && pwd)/menu"
+  mkdir "$directory"
+  "$python_bin" audio.py "$recording" "$directory/menu-speech.wav"
+  digit=2
+  if [[ $case_name == menu-replay-changed ]]; then digit=3; fi
+  check_menu_recording "$directory" "$digit"
+  exit 0
+fi
 if [[ $case_name == menu-preflight ]]; then
   for digit in 2 3; do
     directory="$(cd "$logdir" && pwd)/menu-$digit"
     mkdir "$directory"
-    sh render_menu.sh "$digit" "$directory/menu-heard.wav"
-    run_menu_worker "$directory" > "$directory/recognition.log" 2>&1 || report_worker_failure "$?" "$directory"
-    "$python_bin" menu_guard.py "$directory/menu-transcript.json" --expect-digit "$digit"
+    sh render_menu.sh "$digit" "$directory/menu-speech.wav"
+    check_menu_recording "$directory" "$digit"
   done
   echo "PASS: both offline menu recordings were recognized"
   exit 0

@@ -33,6 +33,7 @@ def test_only_one_explicit_matching_route_is_authorized(transcript, key):
     ("For claim status press three.", "menu-changed", []),
     ("For claim status, press free.", "menu-changed", []),
     ("Unclear.", "menu-changed", []),
+    ("For clean status, press 2.", "menu-control", []),
 ])
 def test_received_menu_gates_keypad(tmp_path, monkeypatch, transcript, case, expected):
     sip = Path(__file__).resolve().parents[1] / "lab/sip"
@@ -48,14 +49,16 @@ def test_received_menu_gates_keypad(tmp_path, monkeypatch, transcript, case, exp
         emitted.append(digit)
 
     async def track():
-        for block in (bytes(800), tone(1520, 400), tone(1520, 400)):
+        for block in (tone(440, 400), tone(1520, 400), tone(1520, 400)):
             yield SimpleNamespace(frame=SimpleNamespace(data=memoryview(block)))
 
     async def recognize():
-        while not (tmp_path / "menu-heard.wav").exists():
+        while not (tmp_path / "menu-speech.wav").exists():
             await asyncio.sleep(0.01)
         with wave.open(str(tmp_path / "menu-heard.wav")) as wav:
             assert wav.getnframes() == 1200
+        with wave.open(str(tmp_path / "menu-speech.wav")) as wav:
+            assert wav.getnframes() == 400
         runner.publish(tmp_path / "menu-transcript.json", {"transcript": transcript})
 
     async def run():

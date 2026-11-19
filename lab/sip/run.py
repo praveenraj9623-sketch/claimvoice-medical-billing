@@ -12,7 +12,7 @@ import numpy as np
 from livekit import api, rtc
 
 from menu_guard import EXPECTED, decide, publish
-from audio import RATE, matches, tone_frames
+from audio import RATE, matches, prepare_menu_audio, tone_frames
 
 URL = "ws://server:7880"
 KEY = "labkey"
@@ -66,7 +66,14 @@ async def check_menu(room, stream, directory):
             publish(directory / "menu-result.json", {"decision": "review_required", "reason": "incomplete_menu",
                                                       "audio": "recording.wav", "sent_digits": []})
             return False
-    temporary.replace(directory / "menu-heard.wav")
+    raw = directory / "menu-heard.wav"
+    temporary.replace(raw)
+    try:
+        prepare_menu_audio(raw, directory / "menu-speech.wav")
+    except ValueError as error:
+        publish(directory / "menu-result.json", {"decision": "review_required", "reason": "incomplete_menu",
+                                                 "detail": str(error), "sent_digits": []})
+        return False
     path = directory / "menu-transcript.json"
     async def receive():
         while not path.exists():

@@ -71,3 +71,11 @@ Find the received WAV, transcript, decision and sent digits in the run's
 2. The changed-menu test passes when the caller hears 3, requests review, and
 Asterisk's hangup log confirms an empty selection. A recognition error, an
 unclear transcript, or missing receiver evidence cannot pass that test.
+
+To replay a failed SIP control, run `bash scripts/run_sip_probe.sh --menu-replay-control path/to/menu-heard.wav`.
+For a changed-menu recording use `--menu-replay-changed`. Replay reads the original capture,
+writes into a fresh artifact directory, and runs the live menu recognizer and decision rule.
+It neither starts Docker nor sends a key. Live and replay ASR both use `menu-speech.wav`,
+which excludes the two confirmed 50 ms blocks of the simulated insurer's ending tone
+and trims excess leading digital silence. The raw SIP recording stays in `menu-heard.wav`.
+Only a fresh call provides receiver-side evidence of which key reached Asterisk.

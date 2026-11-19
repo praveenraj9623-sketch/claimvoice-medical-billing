@@ -1,6 +1,9 @@
-import numpy as np
+import wave
 
-from lab.sip.audio import matches, tone, tone_frames
+import numpy as np
+import pytest
+
+from lab.sip.audio import matches, prepare_menu_audio, tone, tone_frames
 
 
 def test_telephone_marker_and_returned_audio_are_distinct():
@@ -21,3 +24,18 @@ def test_return_tone_survives_packet_boundaries_and_unaligned_detection():
         start = sample_offset * 2
         assert matches(audio[start:start + 800], 980)
         assert matches(audio[start + 800:start + 1600], 980)
+
+@pytest.mark.parametrize("pcm", [
+    tone(440, 400) + tone(1520, 400),
+    tone(440, 400) + tone(660, 800),
+    bytes(800) + tone(1520, 800),
+])
+def test_incomplete_or_silent_menu_produces_no_asr_input(tmp_path, pcm):
+    recording = tmp_path / "received.wav"
+    output = tmp_path / "speech.wav"
+    with wave.open(str(recording), "wb") as src:
+        src.setparams((1, 2, 8000, 0, "NONE", ""))
+        src.writeframes(pcm)
+    with pytest.raises(ValueError):
+        prepare_menu_audio(recording, output)
+    assert not output.exists()
