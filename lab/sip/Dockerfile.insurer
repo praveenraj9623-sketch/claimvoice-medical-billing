@@ -6,4 +6,6 @@ RUN ffmpeg -v error -f lavfi -i "flite=text='This is Daniel. The claim is still 
 RUN ffmpeg -v error -f lavfi -i "flite=text='This is Maria. The claim was paid. We paid eight hundred and fifty dollars on March twentieth, twenty twenty six. The payment reference is eight eight four one.':voice=slt" -ar 8000 -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/paid.ulaw
 RUN ffmpeg -v error -f lavfi -i "flite=text='First digit is eight. Second digit is eight. Third digit is four. Fourth digit is one.':voice=slt" -ar 8000 -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/digits.ulaw
 RUN ffmpeg -v error -f lavfi -i "flite=text='Position one is eight. Position two is eight. Position three is four. Position four is one.':voice=slt" -ar 8000 -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/positions.ulaw
+RUN ffmpeg -v error -f lavfi -i "sine=frequency=1520:sample_rate=8000:duration=0.3" -ac 1 -f mulaw /var/lib/asterisk/sounds/claimcall/keypad-ready.ulaw
+COPY logger.conf /etc/asterisk/logger.conf
 CMD ["asterisk", "-f", "-U", "asterisk", "-G", "asterisk", "-vv"]

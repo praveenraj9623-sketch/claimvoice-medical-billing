@@ -86,7 +86,6 @@ async def check_menu(room, stream, directory):
     publish(directory / "menu-decision.json", decision)
     outcome = {**decision, "sent_digits": []}
     if decision.get("decision") == "authorized" and decision.get("heard_digit") == EXPECTED:
-        await asyncio.sleep(0.35)  # Asterisk finishes the marker before listening for DTMF.
         await room.local_participant.publish_dtmf(code=int(EXPECTED), digit=EXPECTED)
         outcome["sent_digits"].append(EXPECTED)
     publish(directory / "menu-result.json", outcome)
@@ -140,7 +139,10 @@ async def probe():
             await asyncio.wait_for(wait_audio(stream), 12)
             print("Received insurer menu audio")
             await room.local_participant.publish_dtmf(code=2, digit="2")
-        await asyncio.wait_for(wait_audio(stream, 660), 8)
+        try:
+            await asyncio.wait_for(wait_audio(stream, 660), 8)
+        except (TimeoutError, RuntimeError) as exc:
+            raise RuntimeError("Key 2 dispatched; no Asterisk acceptance tone received") from exc
         print("Asterisk accepted digit 2")
         if guard_directory and not exchange:
             return

@@ -79,3 +79,7 @@ It neither starts Docker nor sends a key. Live and replay ASR both use `menu-spe
 which excludes the two confirmed 50 ms blocks of the simulated insurer's ending tone
 and trims excess leading digital silence. The raw SIP recording stays in `menu-heard.wav`.
 Only a fresh call provides receiver-side evidence of which key reached Asterisk.
+The lab plays the 1520 Hz marker as the Asterisk `Read()` prompt, so the
+keypad reader owns the channel when ClaimCall hears the cue. The caller's
+`sent_digits` records dispatch. Use Asterisk's DTMF logs and
+`CLAIMCALL_MENU_EXIT` line, which includes `READSTATUS`, to confirm receipt.
