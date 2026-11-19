@@ -44,3 +44,27 @@ It prints JSON and reads the saved files without changing them. Exit 0 means
 verified, 1 means the field needs review, and 2 means the audit inputs could
 not be read or validated. To test a deliberately altered copy, pass the copy as
 the record and `--transcripts path/to/original/transcripts.json` as its evidence.
+
+### Changed claim-status menu
+
+In WSL, activate the same Python environment with the cached small.en speech
+model used for paid calls. Run these commands from the repository root:
+
+```bash
+bash scripts/run_sip_probe.sh --menu-control
+bash scripts/run_sip_probe.sh --menu-changed
+```
+
+The control offers key 2. The changed menu offers key 3. The caller records the
+received SIP audio through the end-of-menu tone and a local Whisper worker
+transcribes it before the caller can send a key. Only a single explicit
+claim-status instruction matching the approved key 2 authorizes navigation.
+An unclear or changed menu goes to review. The end-of-menu tone is part of the
+simulated insurer. The pending and paid exchanges use the same check. The
+original echo-only transport diagnostic continues to exercise keypad transport.
+
+Find the received WAV, transcript, decision and sent digits in the run's
+`artifacts/sip/.../menu/` directory. The control passes when Asterisk receives
+2. The changed-menu test passes when the caller hears 3, requests review, and
+Asterisk's hangup log confirms an empty selection. A recognition error, an
+unclear transcript, or missing receiver evidence cannot pass that test.

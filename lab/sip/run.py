@@ -1,6 +1,7 @@
 """Private transport probe. Asterisk emits 660 Hz only after receiving key 2."""
 import asyncio
 import os
+import json
 import wave
 from pathlib import Path
 from contextlib import AsyncExitStack
@@ -10,6 +11,7 @@ from uuid import uuid4
 import numpy as np
 from livekit import api, rtc
 
+from menu_guard import EXPECTED, publish
 from audio import RATE, matches, tone_frames
 
 URL = "ws://server:7880"
@@ -53,10 +55,44 @@ async def exchange_question(room, source, stream, question, reply):
     print("Received simulated representative's answer over SIP")
 
 
+async def check_menu(room, stream, directory):
+    # Publish only a closed WAV; the host recognizer sees exactly what the caller heard.
+    temporary = directory / "recording.wav"
+    with wave.open(str(temporary), "wb") as wav:
+        wav.setparams((1, 2, RATE, 0, "NONE", ""))
+        try:
+            await asyncio.wait_for(wait_audio(stream, 1520, recording=wav), 12)
+        except (asyncio.TimeoutError, RuntimeError):
+            publish(directory / "menu-result.json", {"decision": "review_required", "reason": "incomplete_menu",
+                                                      "audio": "recording.wav", "sent_digits": []})
+            return False
+    temporary.replace(directory / "menu-heard.wav")
+    path = directory / "menu-decision.json"
+    async def receive():
+        while not path.exists():
+            await asyncio.sleep(0.1)
+        return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        decision = await asyncio.wait_for(receive(), 18)
+    except asyncio.TimeoutError:
+        decision = {"decision": "review_required", "reason": "recognition_timeout"}
+    outcome = {**decision, "sent_digits": []}
+    if decision.get("decision") == "authorized" and decision.get("heard_digit") == EXPECTED:
+        await asyncio.sleep(0.35)  # Asterisk finishes the marker before listening for DTMF.
+        await room.local_participant.publish_dtmf(code=int(EXPECTED), digit=EXPECTED)
+        outcome["sent_digits"].append(EXPECTED)
+    publish(directory / "menu-result.json", outcome)
+    print("Menu result:", json.dumps(outcome), flush=True)
+    return bool(outcome["sent_digits"])
+
+
 async def probe():
     exchange = os.environ.get("CLAIMCALL_EXCHANGE_DIR")
     paid = os.environ.get("CLAIMCALL_CASE") == "paid"
-    extension = ("7003" if paid else "7002") if exchange else "7001"
+    extension = os.environ.get("CLAIMCALL_EXTENSION", "7001")
+    guard_directory = os.environ.get("CLAIMCALL_MENU_DIR")
+    if (exchange or extension != "7001") and not guard_directory:
+        raise RuntimeError("A menu check is required for this route")
     room_name = "sip-probe-" + uuid4().hex
     room = rtc.Room()
     incoming = asyncio.get_running_loop().create_future()
@@ -87,11 +123,19 @@ async def probe():
             participant_identity="insurer", wait_until_answered=True))
         stream = await asyncio.wait_for(incoming, 10)
         stack.push_async_callback(stream.aclose)
-        await asyncio.wait_for(wait_audio(stream), 12)
-        print("Received insurer menu audio")
-        await room.local_participant.publish_dtmf(code=2, digit="2")
+        if guard_directory:
+            if not await check_menu(room, stream, Path(guard_directory)):
+                if exchange:
+                    raise RuntimeError("Menu requires review; see menu-result.json")
+                return
+        else:
+            await asyncio.wait_for(wait_audio(stream), 12)
+            print("Received insurer menu audio")
+            await room.local_participant.publish_dtmf(code=2, digit="2")
         await asyncio.wait_for(wait_audio(stream, 660), 8)
         print("Asterisk accepted digit 2")
+        if guard_directory and not exchange:
+            return
         # Allow the marker to finish and Echo() to begin before transmitting.
         await asyncio.sleep(1.2)
         if exchange:
