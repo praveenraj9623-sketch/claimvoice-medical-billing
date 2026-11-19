@@ -44,9 +44,11 @@ def test_replay_native_worker_failure_is_reported(tmp_path, monkeypatch):
         (recordings / name).write_bytes(b"untouched source")
     monkeypatch.setattr(sys, "argv", ["sip_exchange", "--replay", str(recordings)])
 
-    def crash(command, stdout, stderr):
+    def crash(command, stdout, stderr, cwd, env):
         assert command[:2] == [sys.executable, str(sip_exchange.RECOGNITION_WORKER)]
         assert command[2] == str(recordings)
+        assert cwd == sip_exchange.REPOSITORY_ROOT
+        assert env["CT2_USE_MKL"] == "0"
         stdout.write("native library load failed")
         return subprocess.CompletedProcess(command, 2)
 
@@ -57,6 +59,9 @@ def test_replay_native_worker_failure_is_reported(tmp_path, monkeypatch):
     assert result["failed_stage"] == "recognition"
     assert result["recognition_exit_code"] == 2
     assert (path.parent / "recognition.log").read_text() == "native library load failed"
+    startup = json.loads((path.parent / "recognition-startup.json").read_text())
+    assert startup["worker_exit_code"] == 2
+    assert startup["executable"] == sys.executable
     assert {item.read_bytes() for item in recordings.iterdir()} == {b"untouched source"}
 
 
@@ -96,3 +101,86 @@ def test_worker_launches_from_outside_checkout(tmp_path, monkeypatch):
     assert result["model"] == "small.en"
     assert result["insurer"] == "This is Daniel. The claim is pending."
     assert result["mismatches"] == []
+
+
+def test_fresh_startup_keeps_synthesis_out_of_parent_and_freezes_worker_env(tmp_path, monkeypatch):
+    import json
+    import os
+    import shutil
+    import subprocess
+    import sys
+    from claimcall import sip_exchange
+
+    # Use real child interpreters and WAV synthesis I/O, with only speech engines stubbed.
+    (tmp_path / "piper.py").write_text(
+        "class PiperVoice:\n"
+        "    @classmethod\n"
+        "    def load(cls, path): return cls()\n"
+        "    def synthesize_wav(self, text, wav):\n"
+        "        wav.setparams((1, 2, 8000, 0, 'NONE', ''))\n"
+        "        wav.writeframes(b'\\x01\\x00' * 800)\n"
+    )
+    (tmp_path / "faster_whisper.py").write_text(
+        "from pathlib import Path\n"
+        "from types import SimpleNamespace\n"
+        "class WhisperModel:\n"
+        "    def __init__(self, *args, **kwargs): pass\n"
+        "    def transcribe(self, path, **kwargs):\n"
+        "        return [SimpleNamespace(text=Path(path).read_text())], None\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/operator/library/path")
+    monkeypatch.setenv("CT2_USE_MKL", "1")
+    monkeypatch.setattr(sys, "argv", ["sip_exchange", "--voice", str(tmp_path / "voice with spaces.onnx")])
+    monkeypatch.setattr(sip_exchange, "extract", lambda _: CASES["pending"][1])
+    real_run = subprocess.run
+    parent_native_before = {name: name in sys.modules for name in ("piper", "onnxruntime")}
+
+    def run(command, *args, **kwargs):
+        if command[0] == "ffmpeg":
+            shutil.copyfile(command[command.index("-i") + 1], command[-1])
+            return subprocess.CompletedProcess(command, 0)
+        if command[:2] == ["bash", "scripts/run_sip_probe.sh"]:
+            directory = Path(command[-1])
+            (directory / "question-heard.wav").write_text("Billing office asking for claim status.")
+            (directory / "reply-heard.wav").write_text("This is Daniel. The claim is pending.")
+            monkeypatch.chdir(tmp_path.parent)
+            os.environ["LD_LIBRARY_PATH"] = "/changed/after/synthesis"
+            os.environ["CT2_USE_MKL"] = "0"
+            return subprocess.CompletedProcess(command, 0)
+        return real_run(command, *args, **kwargs)
+
+    from pathlib import Path
+    monkeypatch.setattr(subprocess, "run", run)
+    assert sip_exchange.main() == 0
+    path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
+    startup = json.loads((path.parent / "recognition-startup.json").read_text())
+    assert startup["environment"]["LD_LIBRARY_PATH"] == "/operator/library/path"
+    assert startup["environment"]["CT2_USE_MKL"] == "1"
+    assert startup["cwd"] == str(sip_exchange.REPOSITORY_ROOT)
+    assert startup["parent_native_modules"] == parent_native_before
+    assert startup["worker_exit_code"] == 0
+    assert (path.parent / "question-original.wav").stat().st_size > 44
+    assert json.loads(path.read_text())["mismatches"] == []
+
+
+def test_synthesis_worker_failure_stops_before_sip(tmp_path, monkeypatch):
+    import json
+    import subprocess
+    import sys
+    from claimcall import sip_exchange
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["sip_exchange", "--voice", "missing.onnx"])
+
+    def fail(command, stdout, stderr, check):
+        assert command[:2] == [sys.executable, str(sip_exchange.SYNTHESIS_WORKER)]
+        stdout.write("Piper could not load the voice")
+        raise subprocess.CalledProcessError(2, command)
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    assert sip_exchange.main() == 1
+    path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
+    assert json.loads(path.read_text())["failed_stage"] == "question synthesis"
+    assert (path.parent / "synthesis.log").read_text() == "Piper could not load the voice"
