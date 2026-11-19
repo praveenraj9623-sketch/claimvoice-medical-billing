@@ -37,8 +37,8 @@ async def wait_audio(stream, hz=None, recording=None):
     raise RuntimeError("Remote audio ended before the expected signal")
 
 
-async def exchange_question(room, source, stream, directory):
-    with wave.open(str(directory / "question.wav"), "rb") as wav:
+async def exchange_question(room, source, stream, question, reply):
+    with wave.open(str(question), "rb") as wav:
         if (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) != (RATE, 1, 2):
             raise ValueError("Question must be 8 kHz mono PCM16")
         while pcm := wav.readframes(160):
@@ -47,7 +47,7 @@ async def exchange_question(room, source, stream, directory):
     await asyncio.sleep(0.25)
     await room.local_participant.publish_dtmf(code=11, digit="#")
     await asyncio.wait_for(wait_audio(stream, 1200), 8)
-    with wave.open(str(directory / "reply-heard.wav"), "wb") as wav:
+    with wave.open(str(reply), "wb") as wav:
         wav.setparams((1, 2, RATE, 0, "NONE", ""))
         await asyncio.wait_for(wait_audio(stream, 1400, recording=wav), 15)
     print("Received simulated representative's answer over SIP")
@@ -55,6 +55,8 @@ async def exchange_question(room, source, stream, directory):
 
 async def probe():
     exchange = os.environ.get("CLAIMCALL_EXCHANGE_DIR")
+    paid = os.environ.get("CLAIMCALL_CASE") == "paid"
+    extension = ("7003" if paid else "7002") if exchange else "7001"
     room_name = "sip-probe-" + uuid4().hex
     room = rtc.Room()
     incoming = asyncio.get_running_loop().create_future()
@@ -81,7 +83,7 @@ async def probe():
                                            transport="SIP_TRANSPORT_UDP", numbers=["7000"])))
         stack.push_async_callback(client.sip.delete_sip_trunk, api.DeleteSIPTrunkRequest(sip_trunk_id=trunk.sip_trunk_id))
         await client.sip.create_sip_participant(api.CreateSIPParticipantRequest(
-            sip_trunk_id=trunk.sip_trunk_id, sip_call_to="7002" if exchange else "7001", room_name=room_name,
+            sip_trunk_id=trunk.sip_trunk_id, sip_call_to=extension, room_name=room_name,
             participant_identity="insurer", wait_until_answered=True))
         stream = await asyncio.wait_for(incoming, 10)
         stack.push_async_callback(stream.aclose)
@@ -93,7 +95,14 @@ async def probe():
         # Allow the marker to finish and Echo() to begin before transmitting.
         await asyncio.sleep(1.2)
         if exchange:
-            await exchange_question(room, source, stream, Path(exchange))
+            directory = Path(exchange)
+            await exchange_question(room, source, stream, directory / "question.wav", directory / "reply-heard.wav")
+            if paid:
+                for attempt in (1, 2):
+                    # The ending marker lasts 500 ms. Start after Record() is listening.
+                    await asyncio.sleep(0.8)
+                    await exchange_question(room, source, stream, directory / f"clarify-{attempt}.wav",
+                                            directory / f"reference-{attempt}-heard.wav")
             return
         for pcm in tone_frames(980, samples_per_frame=160, frame_count=40):
             await source.capture_frame(rtc.AudioFrame(pcm, RATE, 1, 160))
@@ -104,4 +113,4 @@ async def probe():
 
 if __name__ == "__main__":
     print("LiveKit SDK", version("livekit"), "API", version("livekit-api"))
-    asyncio.run(asyncio.wait_for(probe(), timeout=65))
+    asyncio.run(asyncio.wait_for(probe(), timeout=100 if os.environ.get("CLAIMCALL_CASE") == "paid" else 65))

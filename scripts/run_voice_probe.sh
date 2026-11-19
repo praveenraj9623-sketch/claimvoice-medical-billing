@@ -7,14 +7,18 @@ voice="$PWD/models/en_US-lessac-medium.onnx"
 args=(--voice "$voice")
 if [[ $# == 1 && $1 == --sip-pending ]]; then
   target=claimcall.sip_exchange
-elif [[ $# == 2 && $1 == --sip-replay ]]; then
+elif [[ $# == 1 && $1 == --sip-paid ]]; then
+  target=claimcall.sip_exchange
+  args+=(--case paid)
+elif [[ $# == 2 && ( $1 == --sip-replay || $1 == --sip-replay-paid ) ]]; then
   target=claimcall.sip_exchange
   for wav in question-heard.wav reply-heard.wav; do
     [[ -s "$2/$wav" ]] || { echo "Missing received recording: $2/$wav" >&2; exit 1; }
   done
   args=(--replay "$2")
+  if [[ $1 == --sip-replay-paid ]]; then args+=(--case paid); fi
 elif (( $# )); then
-  echo "Usage: $0 [--sip-pending | --sip-replay RECORDING_DIRECTORY]" >&2
+  echo "Usage: $0 [--sip-pending | --sip-paid | --sip-replay RECORDING_DIRECTORY | --sip-replay-paid RECORDING_DIRECTORY]" >&2
   exit 2
 fi
 for binary in llama-server curl; do

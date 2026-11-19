@@ -2,7 +2,8 @@
 set -euo pipefail
 exchange=""
 if (( $# )); then
-  [[ $# == 2 && $1 == --pending && -s "$2/question.wav" ]] || { echo "Usage: $0 [--pending DIRECTORY_WITH_QUESTION_WAV]" >&2; exit 2; }
+  [[ $# == 2 && ( $1 == --pending || $1 == --paid ) && -s "$2/question.wav" ]] || { echo "Usage: $0 [--pending|--paid DIRECTORY_WITH_QUESTION_WAV]" >&2; exit 2; }
+  case_name=${1#--}
   exchange=$(cd "$2" && pwd)
 fi
 cd "$(dirname "$0")/../lab/sip"
@@ -44,8 +45,13 @@ docker compose exec -T insurer asterisk -rx 'core show version' > "$logdir/aster
 docker compose exec -T insurer asterisk -rx 'module show like websocket' >> "$logdir/asterisk.txt"
 docker compose exec -T insurer asterisk -rx 'core show application AudioSocket' >> "$logdir/asterisk.txt"
 if [[ -n "$exchange" ]]; then
-  docker compose run --rm -T -v "$exchange:/exchange" -e CLAIMCALL_EXCHANGE_DIR=/exchange probe 2>&1 | tee "$logdir/result.log"
+  docker compose run --rm -T -v "$exchange:/exchange" -e CLAIMCALL_EXCHANGE_DIR=/exchange -e "CLAIMCALL_CASE=$case_name" probe 2>&1 | tee "$logdir/result.log"
   docker compose cp insurer:/tmp/claimcall-question.wav "$exchange/question-heard.wav"
+  if [[ "$case_name" == paid ]]; then
+    for attempt in 1 2; do
+      docker compose cp "insurer:/tmp/claimcall-clarify-$attempt.wav" "$exchange/clarify-$attempt-heard.wav"
+    done
+  fi
 else
   docker compose run --rm -T probe 2>&1 | tee "$logdir/result.log"
 fi

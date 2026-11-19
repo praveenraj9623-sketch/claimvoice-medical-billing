@@ -184,3 +184,58 @@ def test_synthesis_worker_failure_stops_before_sip(tmp_path, monkeypatch):
     path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
     assert json.loads(path.read_text())["failed_stage"] == "question synthesis"
     assert (path.parent / "synthesis.log").read_text() == "Piper could not load the voice"
+
+
+@pytest.mark.parametrize(("readings", "reference", "review"), [
+    (["Position one is eight, position two is eight, position three is four, position four is one.",
+      "First digit is eight. Second digit is eight. Third digit is four. Fourth digit is one."], "8841", False),
+    (["First digit is one.", "First digit is two."], None, True),
+    (["I couldn't hear you.", "I couldn't hear you."], None, True),
+    ([], None, True),
+])
+def test_paid_reference_requires_agreeing_numbered_readings(readings, reference, review):
+    initial = CASES["paid"][1].model_copy(update={"reference": "841"})
+    result = evaluate("Billing office asking for status.", "Reported payment.", lambda _: initial,
+                      case="paid", reference_readings=readings)
+    assert result["initial_capture"]["reference"] == "841"
+    assert result["captured"]["reference"] == reference
+    assert result["reference_needs_review"] is review
+    assert result["mismatches"] == (["reference"] if review else [])
+
+
+def test_paid_replay_decodes_the_two_received_reference_wavs(tmp_path, monkeypatch):
+    import json
+    import sys
+    from claimcall import sip_exchange
+
+    (tmp_path / "faster_whisper.py").write_text(
+        "from pathlib import Path\n"
+        "from types import SimpleNamespace\n"
+        "class WhisperModel:\n"
+        "    def __init__(self, *args, **kwargs): pass\n"
+        "    def transcribe(self, path, **kwargs):\n"
+        "        return [SimpleNamespace(text=Path(path).read_text())], None\n"
+    )
+    recordings = {
+        "question": "The billing office is asking for claim status.",
+        "reply": "Maria here. Paid 850 dollars on March 20, 2026. Reference 841.",
+        "reference-1": "First digit is eight. Second digit is eight. Third digit is four. Fourth digit is one.",
+        "reference-2": "Position one is eight, position two is eight, position three is four, position four is one.",
+    }
+    for name, text in recordings.items():
+        (tmp_path / f"{name}-heard.wav").write_text(text)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["sip_exchange", "--replay", str(tmp_path), "--case", "paid"])
+
+    def capture(reply):
+        assert reply == recordings["reply"]
+        return CASES["paid"][1].model_copy(update={"reference": "841"})
+
+    monkeypatch.setattr(sip_exchange, "extract", capture)
+    assert sip_exchange.main() == 0
+    path, = tmp_path.glob("artifacts/sip-exchange/*/result.json")
+    report = json.loads(path.read_text())
+    assert report["initial_capture"]["reference"] == "841"
+    assert report["captured"]["reference"] == "8841"
+    assert [turn["value"] for turn in report["reference_turns"]] == ["8841", "8841"]
